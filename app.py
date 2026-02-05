@@ -1030,13 +1030,32 @@ if df is not None:
     attendance_percentage = (total_present / total_work_day * 100) if total_work_day > 0 else 0
     absent_percentage = (total_absent / total_work_day * 100) if total_work_day > 0 else 0
     
-    # Hitung employee_stats terlebih dahulu untuk mendapatkan total jam kerja dari Analisis Per Karyawan
-    employee_stats_temp = filtered_df.groupby(['Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position']).agg({
-        'Real Working Hour Decimal': 'sum'
+    # Hitung employee_stats lengkap terlebih dahulu (untuk digunakan di Ringkasan Statistik, Visualisasi, dan Analisis Per Karyawan)
+    employee_stats_full = filtered_df.groupby(['Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position']).agg({
+        'Is Present': 'sum',
+        'Is Absent': 'sum',
+        'Is Dayoff': 'sum',
+        'Is Leave': 'sum',
+        'Is Late In': 'sum',
+        'Is Early Out': 'sum',
+        'Real Working Hour Decimal': 'sum',
+        'Late In Decimal': 'sum',
+        'Early Out Decimal': 'sum'
     }).reset_index()
     
+    employee_stats_full.columns = [
+        'Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position',
+        'Jumlah Hadir', 'Jumlah Absen', 'Jumlah Hari Libur', 'Jumlah Cuti',
+        'Jumlah Late In', 'Jumlah Early Out',
+        'Total Jam Kerja (Real)',
+        'Total Jam Late In', 'Total Jam Early Out'
+    ]
+    
+    employee_stats_full['Work Days Bulan Ini'] = work_days_month
+    employee_stats_full['Total Jam Kerja (Plant)'] = employee_stats_full['Work Days Bulan Ini'] * 8
+    
     # Hitung total jam kerja dari employee_stats (Analisis Per Karyawan)
-    total_jam_kerja_real = employee_stats_temp['Real Working Hour Decimal'].sum()
+    total_jam_kerja_real = employee_stats_full['Total Jam Kerja (Real)'].sum()
     # Total Jam Kerja Plant = Total Work Day × 8 jam (sama seperti di Analisis Per Karyawan)
     total_jam_kerja_plant = total_work_day * 8
     total_jam_kerja_real_formatted = format_hours(total_jam_kerja_real)
@@ -1153,37 +1172,137 @@ if df is not None:
     
     st.markdown("---")
     
+    # Visualisasi Data - dipindahkan ke sini setelah Ringkasan Statistik
+    st.header("📊 Visualisasi Data")
+    
+    # Tab untuk berbagai visualisasi
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📈 Jumlah Absensi",
+        "⏰ Keterlambatan",
+        "🚪 Early Out",
+        "⏱️ Jam Kerja"
+    ])
+    
+    with tab1:
+        st.subheader("Jumlah Hadir Per Karyawan")
+        # Top 20 karyawan dengan hadir terbanyak
+        top_attendance = employee_stats_full.nlargest(20, 'Jumlah Hadir')
+        fig1 = px.bar(
+            top_attendance,
+            x='Jumlah Hadir',
+            y='Full Name',
+            orientation='h',
+            title="Top 20 Karyawan dengan Kehadiran Terbanyak",
+            labels={'Full Name': 'Nama Karyawan', 'Jumlah Hadir': 'Jumlah Hadir'}
+        )
+        fig1.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
+        st.plotly_chart(fig1, use_container_width=True)
+        
+        # Download data untuk chart ini
+        csv_viz_attendance_tab = top_attendance[['Employee ID', 'Full Name', 'Jumlah Hadir']].to_csv(index=False)
+        st.download_button(
+            label="📥 Download Data Chart Ini (CSV)",
+            data=csv_viz_attendance_tab,
+            file_name=f"data_chart_jumlah_hadir_tab_{selected_branch}.csv",
+            mime="text/csv",
+            key='download_viz_attendance_tab1'
+        )
+    
+    with tab2:
+        st.subheader("Keterlambatan Per Karyawan")
+        # Top 20 karyawan dengan late in terbanyak
+        top_late = employee_stats_full[employee_stats_full['Jumlah Late In'] > 0].nlargest(20, 'Jumlah Late In')
+        if len(top_late) > 0:
+            fig2 = px.bar(
+                top_late,
+                x='Jumlah Late In',
+                y='Full Name',
+                orientation='h',
+                title="Top 20 Karyawan dengan Keterlambatan Terbanyak",
+                labels={'Full Name': 'Nama Karyawan', 'Jumlah Late In': 'Jumlah Keterlambatan'},
+                color='Jumlah Late In',
+                color_continuous_scale='Reds'
+            )
+            fig2.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
+            st.plotly_chart(fig2, use_container_width=True)
+            
+            # Download data untuk chart ini
+            csv_viz_late_tab = top_late[['Employee ID', 'Full Name', 'Jumlah Late In']].to_csv(index=False)
+            st.download_button(
+                label="📥 Download Data Chart Ini (CSV)",
+                data=csv_viz_late_tab,
+                file_name=f"data_chart_late_in_tab_{selected_branch}.csv",
+                mime="text/csv",
+                key='download_viz_late_tab2'
+            )
+        else:
+            st.info("Tidak ada data keterlambatan")
+    
+    with tab3:
+        st.subheader("Early Out Per Karyawan")
+        # Top 20 karyawan dengan early out terbanyak
+        top_early = employee_stats_full[employee_stats_full['Jumlah Early Out'] > 0].nlargest(20, 'Jumlah Early Out')
+        if len(top_early) > 0:
+            fig3 = px.bar(
+                top_early,
+                x='Jumlah Early Out',
+                y='Full Name',
+                orientation='h',
+                title="Top 20 Karyawan dengan Early Out Terbanyak",
+                labels={'Full Name': 'Nama Karyawan', 'Jumlah Early Out': 'Jumlah Early Out'},
+                color='Jumlah Early Out',
+                color_continuous_scale='Oranges'
+            )
+            fig3.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
+            st.plotly_chart(fig3, use_container_width=True)
+        else:
+            st.info("Tidak ada data early out")
+        
+        # Download data Early Out
+        if len(top_early) > 0:
+            csv_viz_early = top_early[['Employee ID', 'Full Name', 'Jumlah Early Out']].to_csv(index=False)
+            st.download_button(
+                label="📥 Download Data Chart Early Out (CSV)",
+                data=csv_viz_early,
+                file_name=f"data_chart_early_out_{selected_branch}.csv",
+                mime="text/csv",
+                key='download_viz_early'
+            )
+    
+    with tab4:
+        st.subheader("Total Jam Kerja Per Karyawan")
+        # Top 20 karyawan dengan jam kerja terbanyak
+        top_hours = employee_stats_full.nlargest(20, 'Total Jam Kerja (Real)')
+        fig4 = px.bar(
+            top_hours,
+            x='Total Jam Kerja (Real)',
+            y='Full Name',
+            orientation='h',
+            title="Top 20 Karyawan dengan Jam Kerja Terbanyak",
+            labels={'Full Name': 'Nama Karyawan', 'Total Jam Kerja (Real)': 'Total Jam Kerja'},
+            color='Total Jam Kerja (Real)',
+            color_continuous_scale='Greens'
+        )
+        fig4.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
+        st.plotly_chart(fig4, use_container_width=True)
+        
+        # Download data untuk chart jam kerja
+        csv_viz_hours = top_hours[['Employee ID', 'Full Name', 'Total Jam Kerja (Real)']].to_csv(index=False)
+        st.download_button(
+            label="📥 Download Data Chart Jam Kerja (CSV)",
+            data=csv_viz_hours,
+            file_name=f"data_chart_jam_kerja_{selected_branch}.csv",
+            mime="text/csv",
+            key='download_viz_hours'
+        )
+    
+    st.markdown("---")
+    
     # Analisis per karyawan
     st.header("👥 Analisis Per Karyawan")
     
-    # work_days_month sudah dihitung di atas untuk Ringkasan Statistik
-    
-    # Group by Employee
-    employee_stats = filtered_df.groupby(['Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position']).agg({
-        'Is Present': 'sum',
-        'Is Absent': 'sum',
-        'Is Dayoff': 'sum',
-        'Is Leave': 'sum',
-        'Is Late In': 'sum',
-        'Is Early Out': 'sum',
-        'Real Working Hour Decimal': 'sum',
-        'Late In Decimal': 'sum',
-        'Early Out Decimal': 'sum'
-    }).reset_index()
-    
-    employee_stats.columns = [
-        'Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position',
-        'Jumlah Hadir', 'Jumlah Absen', 'Jumlah Hari Libur', 'Jumlah Cuti',
-        'Jumlah Late In', 'Jumlah Early Out',
-        'Total Jam Kerja (Real)',
-        'Total Jam Late In', 'Total Jam Early Out'
-    ]
-    
-    # Tambahkan work days bulan ini
-    employee_stats['Work Days Bulan Ini'] = work_days_month
-    
-    # Hitung Total Jam Kerja (Plant) = Work Days Bulan Ini × 8 jam
-    employee_stats['Total Jam Kerja (Plant)'] = employee_stats['Work Days Bulan Ini'] * 8
+    # Gunakan employee_stats_full yang sudah dihitung di atas
+    employee_stats = employee_stats_full.copy()
     
     # Format jam kerja
     def format_hours(hours):
@@ -1444,150 +1563,299 @@ if df is not None:
     
     st.markdown("---")
     
-    # Visualisasi
-    st.header("📊 Visualisasi Data")
+    # Raport per Organization
+    st.header("📋 Raport per Organization")
+    st.markdown("Ringkasan statistik absensi per Organization")
     
-    # Tab untuk berbagai visualisasi
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📈 Jumlah Absensi",
-        "⏰ Keterlambatan",
-        "🚪 Early Out",
-        "⏱️ Jam Kerja"
-    ])
+    # Group by Organization
+    org_stats = filtered_df.groupby('Organization').agg({
+        'Employee ID': 'nunique',
+        'Is Present': 'sum',
+        'Is Absent': 'sum',
+        'Is Leave': 'sum',
+        'Is Late In': 'sum',
+        'Is Early Out': 'sum',
+        'Real Working Hour Decimal': 'sum'
+    }).reset_index()
     
-    with tab1:
-        st.subheader("Jumlah Hadir Per Karyawan")
-        # Top 20 karyawan dengan hadir terbanyak
-        top_attendance = employee_stats.nlargest(20, 'Jumlah Hadir')
-        fig1 = px.bar(
-            top_attendance,
-            x='Jumlah Hadir',
-            y='Full Name',
-            orientation='h',
-            title="Top 20 Karyawan dengan Kehadiran Terbanyak",
-            labels={'Full Name': 'Nama Karyawan', 'Jumlah Hadir': 'Jumlah Hadir'}
-        )
-        fig1.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
-        st.plotly_chart(fig1, use_container_width=True)
+    org_stats.columns = [
+        'Organization',
+        'Total Karyawan',
+        'Total Kehadiran',
+        'Total Tidak Hadir',
+        'Total Cuti',
+        'Total Late In',
+        'Total Early Out',
+        'Total Jam Kerja (Real)'
+    ]
+    
+    # Hitung metrik tambahan
+    org_stats['Work Day'] = work_days_month
+    org_stats['Total Work Day'] = org_stats['Total Karyawan'] * org_stats['Work Day']
+    org_stats['Total Jam Kerja (Plant)'] = org_stats['Total Work Day'] * 8
+    
+    # Hitung persentase
+    org_stats['Kehadiran (%)'] = (org_stats['Total Kehadiran'] / org_stats['Total Work Day'] * 100).round(2)
+    org_stats['Tidak Hadir (%)'] = (org_stats['Total Tidak Hadir'] / org_stats['Total Work Day'] * 100).round(2)
+    org_stats['Plant vs Actual (%)'] = (org_stats['Total Jam Kerja (Real)'] / org_stats['Total Jam Kerja (Plant)'] * 100).round(2)
+    
+    # Format jam kerja
+    def format_hours_org(hours):
+        """Format jam desimal ke format yang mudah dibaca"""
+        h = int(hours)
+        m = int((hours - h) * 60)
+        if m > 0:
+            return f"{h:,} jam {m} menit"
+        else:
+            return f"{h:,} jam"
+    
+    org_stats['Total Jam Kerja (Real) Formatted'] = org_stats['Total Jam Kerja (Real)'].apply(format_hours_org)
+    org_stats['Total Jam Kerja (Plant) Formatted'] = org_stats['Total Jam Kerja (Plant)'].apply(format_hours_org)
+    
+    # Hitung selisih Plant vs Actual
+    org_stats['Selisih Jam Kerja'] = org_stats['Total Jam Kerja (Real)'] - org_stats['Total Jam Kerja (Plant)']
+    org_stats['Selisih Jam Kerja Formatted'] = org_stats['Selisih Jam Kerja'].apply(
+        lambda x: format_hours_org(abs(x)) if x != 0 else '0 jam'
+    )
+    
+    # Checklist Plant
+    org_stats['Checklist Plant'] = org_stats.apply(
+        lambda row: '✅' if row['Total Jam Kerja (Real)'] >= row['Total Jam Kerja (Plant)'] else '❌',
+        axis=1
+    )
+    
+    # Pilih kolom untuk display
+    org_display_cols = [
+        'Organization',
+        'Total Karyawan',
+        'Work Day',
+        'Total Work Day',
+        'Total Kehadiran',
+        'Kehadiran (%)',
+        'Total Tidak Hadir',
+        'Tidak Hadir (%)',
+        'Total Cuti',
+        'Total Late In',
+        'Total Early Out',
+        'Total Jam Kerja (Real) Formatted',
+        'Total Jam Kerja (Plant) Formatted',
+        'Checklist Plant',
+        'Plant vs Actual (%)',
+        'Selisih Jam Kerja Formatted'
+    ]
+    
+    org_display_df = org_stats[org_display_cols].copy()
+    org_display_df.columns = [
+        'Organization',
+        'Total Karyawan',
+        'Work Day',
+        'Total Work Day',
+        'Total Kehadiran',
+        'Kehadiran (%)',
+        'Total Tidak Hadir',
+        'Tidak Hadir (%)',
+        'Total Cuti',
+        'Total Late In',
+        'Total Early Out',
+        'Total Jam Kerja (Real)',
+        'Total Jam Kerja (Plant)',
+        'Checklist Plant',
+        'Plant vs Actual (%)',
+        'Selisih Jam Kerja'
+    ]
+    
+    # Tampilkan cards per Organization
+    st.subheader("📊 Ringkasan per Organization")
+    
+    # Buat cards untuk setiap organization dalam 1 baris (5 kolom)
+    num_orgs = len(org_stats)
+    cols = st.columns(num_orgs)
+    
+    for idx in range(num_orgs):
+        org_row = org_stats.iloc[idx]
+        with cols[idx]:
+            with st.container():
+                st.markdown(f"### {org_row['Organization']}")
+                st.markdown(f"**{org_row['Checklist Plant']}** Plant Status")
+                
+                st.metric("Total Karyawan", int(org_row['Total Karyawan']))
+                st.metric("Total Kehadiran", f"{int(org_row['Total Kehadiran'])} ({org_row['Kehadiran (%)']:.1f}%)")
+                st.metric("Total Tidak Hadir", f"{int(org_row['Total Tidak Hadir'])} ({org_row['Tidak Hadir (%)']:.1f}%)")
+                st.metric("Total Cuti", int(org_row['Total Cuti']))
+                st.metric("Late In", int(org_row['Total Late In']))
+                st.metric("Early Out", int(org_row['Total Early Out']))
+                
+                st.markdown("---")
+                st.markdown(f"**Total Jam Kerja (Real):** {org_row['Total Jam Kerja (Real) Formatted']}")
+                st.markdown(f"**Total Jam Kerja (Plant):** {org_row['Total Jam Kerja (Plant) Formatted']}")
+                st.markdown(f"**Plant vs Actual:** {org_row['Plant vs Actual (%)']:.1f}%")
+                st.markdown(f"**Selisih:** {org_row['Selisih Jam Kerja Formatted']}")
+    
+    st.markdown("---")
+    
+    # Breakdown per Organization dengan peringkat karyawan
+    st.subheader("🔍 Breakdown per Organization")
+    
+    # Selectbox untuk memilih Organization
+    org_list = ['All'] + sorted(org_stats['Organization'].unique().tolist())
+    selected_org_breakdown = st.selectbox(
+        "Pilih Organization untuk melihat breakdown",
+        options=org_list,
+        key='org_breakdown_select'
+    )
+    
+    if selected_org_breakdown != 'All':
+        # Filter employee_stats berdasarkan organization yang dipilih
+        org_employees = employee_stats_full[employee_stats_full['Organization'] == selected_org_breakdown].copy()
         
-        # Download data untuk chart ini
-        csv_viz_attendance_tab = top_attendance[['Employee ID', 'Full Name', 'Jumlah Hadir']].to_csv(index=False)
-        st.download_button(
-            label="📥 Download Data Chart Ini (CSV)",
-            data=csv_viz_attendance_tab,
-            file_name=f"data_chart_jumlah_hadir_tab_{selected_branch}.csv",
-            mime="text/csv",
-            key='download_viz_attendance_tab1'
-        )
-    
-    with tab2:
-        st.subheader("Keterlambatan Per Karyawan")
-        # Top 20 karyawan dengan late in terbanyak
-        top_late = employee_stats[employee_stats['Jumlah Late In'] > 0].nlargest(20, 'Jumlah Late In')
-        if len(top_late) > 0:
-            fig2 = px.bar(
-                top_late,
-                x='Jumlah Late In',
-                y='Full Name',
-                orientation='h',
-                title="Top 20 Karyawan dengan Keterlambatan Terbanyak",
-                labels={'Full Name': 'Nama Karyawan', 'Jumlah Late In': 'Jumlah Keterlambatan'},
-                color='Jumlah Late In',
-                color_continuous_scale='Reds'
-            )
-            fig2.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
-            st.plotly_chart(fig2, use_container_width=True)
+        if len(org_employees) > 0:
+            # Format jam kerja untuk breakdown
+            org_employees['Total Jam Kerja (Real) Formatted'] = org_employees['Total Jam Kerja (Real)'].apply(format_hours_org)
+            org_employees['Total Jam Kerja (Plant) Formatted'] = org_employees['Total Jam Kerja (Plant)'].apply(format_hours_org)
             
-            # Download data untuk chart ini
-            csv_viz_late_tab = top_late[['Employee ID', 'Full Name', 'Jumlah Late In']].to_csv(index=False)
-            st.download_button(
-                label="📥 Download Data Chart Ini (CSV)",
-                data=csv_viz_late_tab,
-                file_name=f"data_chart_late_in_tab_{selected_branch}.csv",
-                mime="text/csv",
-                key='download_viz_late_tab2'
+            # Hitung checklist dan kekurangan
+            org_employees['Checklist Plant'] = org_employees.apply(
+                lambda row: '✅' if row['Total Jam Kerja (Real)'] >= row['Total Jam Kerja (Plant)'] else '❌',
+                axis=1
             )
+            org_employees['Kekurangan Jam Kerja'] = org_employees.apply(
+                lambda row: max(0, row['Total Jam Kerja (Plant)'] - row['Total Jam Kerja (Real)']),
+                axis=1
+            )
+            org_employees['Kekurangan Jam Kerja Formatted'] = org_employees['Kekurangan Jam Kerja'].apply(
+                lambda x: format_hours_org(x) if x > 0 else '0 jam'
+            )
+            
+            # Selectbox untuk memilih metrik perangkingan
+            ranking_metric = st.selectbox(
+                "Peringkat berdasarkan",
+                options=[
+                    'Total Jam Kerja (Real)',
+                    'Jumlah Hadir',
+                    'Jumlah Absen',
+                    'Jumlah Late In',
+                    'Jumlah Early Out'
+                ],
+                key='ranking_metric_select'
+            )
+            
+            # Sort berdasarkan metrik yang dipilih (descending untuk peringkat)
+            if ranking_metric == 'Total Jam Kerja (Real)':
+                org_employees_sorted = org_employees.sort_values('Total Jam Kerja (Real)', ascending=False)
+            elif ranking_metric == 'Jumlah Hadir':
+                org_employees_sorted = org_employees.sort_values('Jumlah Hadir', ascending=False)
+            elif ranking_metric == 'Jumlah Absen':
+                org_employees_sorted = org_employees.sort_values('Jumlah Absen', ascending=False)
+            elif ranking_metric == 'Jumlah Late In':
+                org_employees_sorted = org_employees.sort_values('Jumlah Late In', ascending=False)
+            elif ranking_metric == 'Jumlah Early Out':
+                org_employees_sorted = org_employees.sort_values('Jumlah Early Out', ascending=False)
+            
+            # Tambahkan kolom peringkat
+            org_employees_sorted['Peringkat'] = range(1, len(org_employees_sorted) + 1)
+            
+            # Pilih kolom untuk display
+            breakdown_cols = [
+                'Peringkat',
+                'Employee ID',
+                'Full Name',
+                'Job Position',
+                'Work Days Bulan Ini',
+                'Jumlah Hadir',
+                'Jumlah Absen',
+                'Jumlah Cuti',
+                'Jumlah Late In',
+                'Jumlah Early Out',
+                'Total Jam Kerja (Real) Formatted',
+                'Total Jam Kerja (Plant) Formatted',
+                'Checklist Plant',
+                'Kekurangan Jam Kerja Formatted'
+            ]
+            
+            breakdown_df = org_employees_sorted[breakdown_cols].copy()
+            breakdown_df.columns = [
+                'Peringkat',
+                'ID',
+                'Nama',
+                'Posisi',
+                'Work Days Bulan Ini',
+                'Jumlah Hadir',
+                'Jumlah Absen',
+                'Cuti',
+                'Late In',
+                'Early Out',
+                'Total Jam Kerja (Real)',
+                'Total Jam Kerja (Plant)',
+                'Checklist Plant',
+                'Kekurangan Jam Kerja'
+            ]
+            
+            st.markdown(f"### 📊 Breakdown Organization: **{selected_org_breakdown}**")
+            st.markdown(f"**Total Karyawan:** {len(org_employees_sorted)} | **Peringkat berdasarkan:** {ranking_metric}")
+            
+            # Tampilkan tabel breakdown dengan peringkat
+            st.dataframe(
+                breakdown_df,
+                use_container_width=True,
+                height=500
+            )
+            
+            # Download button untuk breakdown
+            csv_breakdown = org_employees_sorted.drop(columns=['Branch', 'Organization', 'Total Jam Kerja (Real) Formatted', 'Total Jam Kerja (Plant) Formatted', 'Kekurangan Jam Kerja Formatted'], errors='ignore').to_csv(index=False)
+            
+            col_breakdown1, col_breakdown2 = st.columns(2)
+            with col_breakdown1:
+                st.download_button(
+                    label="📥 Download Breakdown Organization (CSV)",
+                    data=csv_breakdown,
+                    file_name=f"breakdown_{selected_org_breakdown}_{selected_branch}.csv",
+                    mime="text/csv",
+                    key='download_breakdown_csv'
+                )
+            with col_breakdown2:
+                pdf_breakdown = create_table_pdf(
+                    breakdown_df,
+                    f"BREAKDOWN ORGANIZATION - {selected_org_breakdown}",
+                    f"Branch: {selected_branch} | Peringkat berdasarkan: {ranking_metric}"
+                )
+                st.download_button(
+                    label="📄 Download Breakdown Organization (PDF)",
+                    data=pdf_breakdown.getvalue(),
+                    file_name=f"breakdown_{selected_org_breakdown}_{selected_branch}.pdf",
+                    mime="application/pdf",
+                    key='download_breakdown_pdf'
+                )
         else:
-            st.info("Tidak ada data keterlambatan")
+            st.info(f"Tidak ada data untuk Organization: {selected_org_breakdown}")
+    else:
+        st.info("Pilih Organization untuk melihat breakdown dan peringkat karyawan")
     
-    with tab3:
-        st.subheader("Early Out Per Karyawan")
-        # Top 20 karyawan dengan early out terbanyak
-        top_early = employee_stats[employee_stats['Jumlah Early Out'] > 0].nlargest(20, 'Jumlah Early Out')
-        if len(top_early) > 0:
-            fig3 = px.bar(
-                top_early,
-                x='Jumlah Early Out',
-                y='Full Name',
-                orientation='h',
-                title="Top 20 Karyawan dengan Early Out Terbanyak",
-                labels={'Full Name': 'Nama Karyawan', 'Jumlah Early Out': 'Jumlah Early Out'},
-                color='Jumlah Early Out',
-                color_continuous_scale='Oranges'
-            )
-            fig3.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
-            st.plotly_chart(fig3, use_container_width=True)
-        else:
-            st.info("Tidak ada data early out")
-        
-        # Download data Early Out
-        if len(top_early) > 0:
-            csv_viz_early = top_early[['Employee ID', 'Full Name', 'Jumlah Early Out']].to_csv(index=False)
-            st.download_button(
-                label="📥 Download Data Chart Early Out (CSV)",
-                data=csv_viz_early,
-                file_name=f"data_chart_early_out_{selected_branch}.csv",
-                mime="text/csv",
-                key='download_viz_early'
-            )
+    st.markdown("---")
     
-    with tab4:
-        st.subheader("Total Jam Kerja Per Karyawan")
-        # Top 20 karyawan dengan jam kerja terbanyak
-        top_hours = employee_stats.nlargest(20, 'Total Jam Kerja (Real)')
-        fig4 = px.bar(
-            top_hours,
-            x='Total Jam Kerja (Real)',
-            y='Full Name',
-            orientation='h',
-            title="Top 20 Karyawan dengan Jam Kerja Terbanyak",
-            labels={'Full Name': 'Nama Karyawan', 'Total Jam Kerja (Real)': 'Total Jam Kerja'},
-            color='Total Jam Kerja (Real)',
-            color_continuous_scale='Greens'
-        )
-        fig4.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
-        st.plotly_chart(fig4, use_container_width=True)
-        
-        # Download data untuk chart jam kerja
-        csv_viz_hours = top_hours[['Employee ID', 'Full Name', 'Total Jam Kerja (Real)', 'Total Jam Kerja (Real) Formatted']].to_csv(index=False)
+    # Download button untuk Raport per Organization
+    csv_org = org_stats.drop(columns=['Total Jam Kerja (Real) Formatted', 'Total Jam Kerja (Plant) Formatted', 'Selisih Jam Kerja Formatted'], errors='ignore').to_csv(index=False)
+    
+    col_org1, col_org2 = st.columns(2)
+    with col_org1:
         st.download_button(
-            label="📥 Download Data Chart Jam Kerja (CSV)",
-            data=csv_viz_hours,
-            file_name=f"data_chart_jam_kerja_{selected_branch}.csv",
+            label="📥 Download Raport per Organization (CSV)",
+            data=csv_org,
+            file_name=f"raport_per_organization_{selected_branch}_{selected_org}.csv",
             mime="text/csv",
-            key='download_viz_hours'
+            key='download_org_csv'
         )
-        
-        # Distribusi jam kerja
-        st.subheader("Distribusi Total Jam Kerja")
-        fig5 = px.histogram(
-            employee_stats,
-            x='Total Jam Kerja (Real)',
-            nbins=30,
-            title="Distribusi Total Jam Kerja Semua Karyawan",
-            labels={'Total Jam Kerja (Real)': 'Total Jam Kerja', 'count': 'Jumlah Karyawan'}
+    with col_org2:
+        pdf_org = create_table_pdf(
+            org_display_df,
+            "RAPORT PER ORGANIZATION",
+            f"Branch: {selected_branch} | Organization: {selected_org if selected_org != 'All' else 'Semua'}"
         )
-        st.plotly_chart(fig5, use_container_width=True)
-        
-        # Download data distribusi jam kerja
-        distribution_data = employee_stats[['Employee ID', 'Full Name', 'Total Jam Kerja (Real)', 'Total Jam Kerja (Real) Formatted']].copy()
-        csv_distribution = distribution_data.to_csv(index=False)
         st.download_button(
-            label="📥 Download Data Distribusi Jam Kerja (CSV)",
-            data=csv_distribution,
-            file_name=f"data_distribusi_jam_kerja_{selected_branch}.csv",
-            mime="text/csv",
-            key='download_distribution'
+            label="📄 Download Raport per Organization (PDF)",
+            data=pdf_org.getvalue(),
+            file_name=f"raport_per_organization_{selected_branch}_{selected_org}.pdf",
+            mime="application/pdf",
+            key='download_org_pdf'
         )
     
     st.markdown("---")
@@ -1752,6 +2020,117 @@ if df is not None:
         
         st.markdown("---")
         
+        # Line chart jam masuk per hari kerja
+        st.markdown("### 📈 Jam Masuk per Hari Kerja")
+        
+        # Tentukan range tanggal untuk chart (gunakan seluruh data jika belum ada filter)
+        min_date_chart = emp_detail['Date'].min().date() if not emp_detail['Date'].empty else pd.Timestamp.now().date()
+        max_date_chart = emp_detail['Date'].max().date() if not emp_detail['Date'].empty else pd.Timestamp.now().date()
+        
+        # Filter data hanya untuk work days (hadir, bukan hari libur)
+        work_days_data = emp_detail[
+            (emp_detail['Is Present'] == True) & 
+            (emp_detail['Is Dayoff'] == False) &
+            (emp_detail['Date'].dt.date >= min_date_chart) &
+            (emp_detail['Date'].dt.date <= max_date_chart)
+        ].copy()
+        
+        if len(work_days_data) > 0:
+            # Parse Check In time ke menit dari 00:00
+            def parse_check_in_to_minutes(check_in_str):
+                """Convert waktu format HH:MM ke menit dari 00:00"""
+                if pd.isna(check_in_str) or check_in_str == '' or check_in_str == '00:00':
+                    return None
+                try:
+                    parts = str(check_in_str).split(':')
+                    if len(parts) == 2:
+                        hours = int(parts[0])
+                        minutes = int(parts[1])
+                        return hours * 60 + minutes
+                    return None
+                except:
+                    return None
+            
+            # Convert Check In ke menit
+            work_days_data['Check In Minutes'] = work_days_data['Check In'].apply(parse_check_in_to_minutes)
+            
+            # Filter hanya yang memiliki Check In valid
+            work_days_data = work_days_data[work_days_data['Check In Minutes'].notna()].copy()
+            
+            if len(work_days_data) > 0:
+                # Sort by date
+                work_days_data = work_days_data.sort_values('Date')
+                
+                # Buat line chart
+                fig_check_in = go.Figure()
+                
+                # Line untuk jam masuk aktual
+                fig_check_in.add_trace(go.Scatter(
+                    x=work_days_data['Date'],
+                    y=work_days_data['Check In Minutes'],
+                    mode='lines+markers',
+                    name='Jam Masuk Aktual',
+                    line=dict(color='#3498db', width=2),
+                    marker=dict(size=6, color='#3498db'),
+                    hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Jam Masuk: %{customdata}<extra></extra>',
+                    customdata=work_days_data['Check In']
+                ))
+                
+                # Garis horizontal untuk plant (08:00 = 480 menit)
+                plant_time_minutes = 8 * 60  # 08:00 = 480 menit
+                fig_check_in.add_hline(
+                    y=plant_time_minutes,
+                    line_dash="dash",
+                    line_color="red",
+                    annotation_text="Plant 08:00",
+                    annotation_position="right",
+                    annotation=dict(font_size=12, font_color="red")
+                )
+                
+                # Format y-axis untuk menampilkan waktu dalam format HH:MM
+                # Tentukan range waktu yang akan ditampilkan
+                min_minutes = max(0, int(work_days_data['Check In Minutes'].min()) - 60)
+                max_minutes = min(24*60, int(work_days_data['Check In Minutes'].max()) + 60)
+                
+                # Buat tick values dan labels untuk y-axis (setiap 30 menit dalam range)
+                tick_vals = []
+                tick_texts = []
+                start_tick = (min_minutes // 30) * 30  # Bulatkan ke bawah ke kelipatan 30
+                end_tick = ((max_minutes // 30) + 1) * 30  # Bulatkan ke atas ke kelipatan 30
+                
+                for minutes in range(start_tick, end_tick + 1, 30):
+                    if minutes <= 24*60:
+                        tick_vals.append(minutes)
+                        hours = minutes // 60
+                        mins = minutes % 60
+                        tick_texts.append(f"{hours:02d}:{mins:02d}")
+                
+                fig_check_in.update_layout(
+                    title="Jam Masuk per Hari Kerja",
+                    xaxis_title="Tanggal",
+                    yaxis_title="Jam Masuk",
+                    height=400,
+                    hovermode='x unified',
+                    yaxis=dict(
+                        tickmode='array',
+                        tickvals=tick_vals,
+                        ticktext=tick_texts,
+                        range=[min_minutes, max_minutes]
+                    ),
+                    xaxis=dict(
+                        tickformat='%Y-%m-%d',
+                        tickangle=-45
+                    )
+                )
+                
+                st.plotly_chart(fig_check_in, use_container_width=True)
+            else:
+                st.info("Tidak ada data jam masuk yang valid untuk ditampilkan")
+        else:
+            st.info("Tidak ada data hari kerja untuk ditampilkan")
+        
+        st.markdown("---")
+        
         # Tabel detail harian dengan filter dan format yang lebih baik
         st.markdown("### 📋 Detail Harian")
         
@@ -1868,7 +2247,7 @@ if df is not None:
         attendance_stats = pd.DataFrame({
             'Metrik': [
                 'Work Days Bulan Ini', 'Jumlah Hadir', 'Jumlah Absen', 'Hari Libur', 'Cuti',
-                'Jumlah Late In', 'Jumlah Early Out', 'Total Jam Kerja (Real)', 'Total Jam Kerja (Actual)'
+                'Jumlah Late In', 'Jumlah Early Out', 'Total Jam Kerja (Real)', 'Total Jam Kerja (Plant)'
             ],
             'Nilai': [
                 int(emp_data['Work Days Bulan Ini']),
@@ -1879,7 +2258,7 @@ if df is not None:
                 int(emp_data['Jumlah Late In']),
                 int(emp_data['Jumlah Early Out']),
                 emp_data['Total Jam Kerja (Real) Formatted'],
-                emp_data['Total Jam Kerja (Actual) Formatted']
+                emp_data['Total Jam Kerja (Plant) Formatted']
             ]
         })
         
