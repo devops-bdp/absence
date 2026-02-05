@@ -134,22 +134,52 @@ if df is not None:
         writer = pd.ExcelWriter(output, engine='openpyxl')
         
         # Sheet 1: Ringkasan Statistik
+        def format_hours_excel(hours):
+            """Format jam desimal ke format yang mudah dibaca"""
+            h = int(hours)
+            m = int((hours - h) * 60)
+            if m > 0:
+                return f"{h:,} jam {m} menit"
+            else:
+                return f"{h:,} jam"
+        
+        total_emp = filtered_df['Employee ID'].nunique()
+        total_pres = filtered_df['Is Present'].sum()
+        total_abs = filtered_df['Is Absent'].sum()
+        work_days = employee_stats_df['Work Days Bulan Ini'].iloc[0] if len(employee_stats_df) > 0 else 0
+        total_work_day = total_emp * work_days
+        attendance_pct = (total_pres / total_work_day * 100) if total_work_day > 0 else 0
+        absent_pct = (total_abs / total_work_day * 100) if total_work_day > 0 else 0
+        
+        # Hitung total jam kerja dari employee_stats_df (Analisis Per Karyawan)
+        total_jam_kerja_real = employee_stats_df['Total Jam Kerja (Real)'].sum() if 'Total Jam Kerja (Real)' in employee_stats_df.columns else filtered_df['Real Working Hour Decimal'].sum()
+        # Total Jam Kerja Plant = Total Work Day × 8 jam
+        total_jam_kerja_plant = total_work_day * 8
+        total_jam_kerja_real_formatted = format_hours_excel(total_jam_kerja_real)
+        total_jam_kerja_plant_formatted = format_hours_excel(total_jam_kerja_plant)
+        
         summary_data = {
             'Metrik': [
                 'Total Karyawan',
-                'Total Record Absensi',
+                'Work Day',
+                'Total Work Day',
                 'Total Kehadiran',
-                'Total Keterlambatan',
-                'Total Early Out',
-                'Work Days Bulan Ini'
+                'Total Kehadiran (%)',
+                'Total Tidak Hadir',
+                'Total Tidak Hadir (%)',
+                'Total Jam Kerja',
+                'Plant Jam Kerja'
             ],
             'Nilai': [
-                filtered_df['Employee ID'].nunique(),
-                len(filtered_df),
-                filtered_df['Is Present'].sum(),
-                filtered_df['Is Late In'].sum(),
-                filtered_df['Is Early Out'].sum(),
-                employee_stats_df['Work Days Bulan Ini'].iloc[0] if len(employee_stats_df) > 0 else 0
+                total_emp,
+                work_days,
+                total_work_day,
+                total_pres,
+                f"{attendance_pct:.2f}%",
+                total_abs,
+                f"{absent_pct:.2f}%",
+                total_jam_kerja_real_formatted,
+                total_jam_kerja_plant_formatted
             ]
         }
         summary_df = pd.DataFrame(summary_data)
@@ -293,14 +323,39 @@ if df is not None:
         # Ringkasan Statistik
         story.append(Paragraph("1. RINGKASAN STATISTIK", heading_style))
         
+        def format_hours_pdf(hours):
+            """Format jam desimal ke format yang mudah dibaca"""
+            h = int(hours)
+            m = int((hours - h) * 60)
+            if m > 0:
+                return f"{h:,} jam {m} menit"
+            else:
+                return f"{h:,} jam"
+        
+        total_emp = filtered_df['Employee ID'].nunique()
+        total_pres = filtered_df['Is Present'].sum()
+        total_abs = filtered_df['Is Absent'].sum()
+        work_days = employee_stats_df['Work Days Bulan Ini'].iloc[0] if len(employee_stats_df) > 0 else 0
+        total_work_day = total_emp * work_days
+        attendance_pct = (total_pres / total_work_day * 100) if total_work_day > 0 else 0
+        absent_pct = (total_abs / total_work_day * 100) if total_work_day > 0 else 0
+        
+        # Hitung total jam kerja dari employee_stats_df (Analisis Per Karyawan)
+        total_jam_kerja_real = employee_stats_df['Total Jam Kerja (Real)'].sum() if 'Total Jam Kerja (Real)' in employee_stats_df.columns else filtered_df['Real Working Hour Decimal'].sum()
+        # Total Jam Kerja Plant = Total Work Day × 8 jam
+        total_jam_kerja_plant = total_work_day * 8
+        total_jam_kerja_real_formatted = format_hours_pdf(total_jam_kerja_real)
+        total_jam_kerja_plant_formatted = format_hours_pdf(total_jam_kerja_plant)
+        
         summary_data = [
             ['Metrik', 'Nilai'],
-            ['Total Karyawan', str(filtered_df['Employee ID'].nunique())],
-            ['Total Record Absensi', str(len(filtered_df))],
-            ['Total Kehadiran', str(filtered_df['Is Present'].sum())],
-            ['Total Keterlambatan', str(filtered_df['Is Late In'].sum())],
-            ['Total Early Out', str(filtered_df['Is Early Out'].sum())],
-            ['Work Days Bulan Ini', str(employee_stats_df['Work Days Bulan Ini'].iloc[0] if len(employee_stats_df) > 0 else 0)]
+            ['Total Karyawan', str(total_emp)],
+            ['Work Day', str(work_days)],
+            ['Total Work Day', str(total_work_day)],
+            ['Total Kehadiran', f"{total_pres} ({attendance_pct:.2f}%)"],
+            ['Total Tidak Hadir', f"{total_abs} ({absent_pct:.2f}%)"],
+            ['Total Jam Kerja', total_jam_kerja_real_formatted],
+            ['Plant Jam Kerja', total_jam_kerja_plant_formatted]
         ]
         
         summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
@@ -918,30 +973,157 @@ if df is not None:
     if selected_org != 'All':
         filtered_df = filtered_df[filtered_df['Organization'] == selected_org]
     
+    # Hitung work days bulan ini (hari kerja Senin-Jumat) - dipindahkan ke atas untuk digunakan di Ringkasan Statistik
+    def calculate_work_days(year, month):
+        """Hitung jumlah hari kerja (Senin-Jumat) dalam bulan tertentu"""
+        from calendar import monthrange
+        import datetime
+        
+        # Dapatkan jumlah hari dalam bulan
+        num_days = monthrange(year, month)[1]
+        
+        # Hitung hari kerja (Senin=0, Jumat=4)
+        work_days = 0
+        for day in range(1, num_days + 1):
+            date = datetime.date(year, month, day)
+            # 0 = Senin, 4 = Jumat
+            if date.weekday() < 5:  # Senin sampai Jumat
+                work_days += 1
+        
+        return work_days
+    
+    # Dapatkan tahun dan bulan dari data untuk work days
+    if not filtered_df['Date'].empty:
+        first_date = filtered_df['Date'].min()
+        year = first_date.year
+        month = first_date.month
+        work_days_month = calculate_work_days(year, month)
+    else:
+        work_days_month = 0
+    
     # Ringkasan statistik
     st.header("📈 Ringkasan Statistik")
     
-    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+    # Fungsi untuk format jam
+    def format_hours(hours):
+        """Format jam desimal ke format yang mudah dibaca"""
+        h = int(hours)
+        m = int((hours - h) * 60)
+        # Format dengan pemisah ribuan dan menit terpisah
+        if m > 0:
+            return f"{h:,} jam {m} menit"
+        else:
+            return f"{h:,} jam"
     
+    def format_hours_simple(hours):
+        """Format jam desimal ke format sederhana (untuk help text)"""
+        return f"{hours:,.2f} jam"
+    
+    # Hitung semua metrik
     total_employees = filtered_df['Employee ID'].nunique()
     total_records = len(filtered_df)
     total_present = filtered_df['Is Present'].sum()
+    total_absent = filtered_df['Is Absent'].sum()
     total_late = filtered_df['Is Late In'].sum()
     total_early_out = filtered_df['Is Early Out'].sum()
+    total_work_day = total_employees * work_days_month
+    attendance_percentage = (total_present / total_work_day * 100) if total_work_day > 0 else 0
+    absent_percentage = (total_absent / total_work_day * 100) if total_work_day > 0 else 0
+    
+    # Hitung employee_stats terlebih dahulu untuk mendapatkan total jam kerja dari Analisis Per Karyawan
+    employee_stats_temp = filtered_df.groupby(['Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position']).agg({
+        'Real Working Hour Decimal': 'sum'
+    }).reset_index()
+    
+    # Hitung total jam kerja dari employee_stats (Analisis Per Karyawan)
+    total_jam_kerja_real = employee_stats_temp['Real Working Hour Decimal'].sum()
+    # Total Jam Kerja Plant = Total Work Day × 8 jam (sama seperti di Analisis Per Karyawan)
+    total_jam_kerja_plant = total_work_day * 8
+    total_jam_kerja_real_formatted = format_hours(total_jam_kerja_real)
+    total_jam_kerja_plant_formatted = format_hours(total_jam_kerja_plant)
+    
+    # Tampilkan metrik dalam 2 baris
+    col_stat1, col_stat2, col_stat3, col_stat4, col_stat5 = st.columns(5)
     
     with col_stat1:
-        st.metric("Total Karyawan", total_employees)
+        st.metric("Total Karyawan", total_employees, help="Formula: COUNT(DISTINCT Employee ID)")
     with col_stat2:
-        st.metric("Total Record Absensi", total_records)
+        st.metric("Work Day", work_days_month, help="Formula: Jumlah hari kerja (Senin-Jumat) dalam bulan")
     with col_stat3:
-        st.metric("Total Kehadiran", total_present)
+        st.metric("Total Work Day", total_work_day, help="Formula: Total Karyawan × Work Day")
     with col_stat4:
-        st.metric("Total Keterlambatan", total_late)
+        st.metric("Total Kehadiran", f"{total_present} ({attendance_percentage:.1f}%)", help=f"Formula: SUM(Is Present)\nPersentase: (Total Kehadiran / Total Work Day) × 100%")
+    with col_stat5:
+        st.metric("Total Tidak Hadir", f"{total_absent} ({absent_percentage:.1f}%)", help=f"Formula: SUM(Is Absent)\nPersentase: (Total Tidak Hadir / Total Work Day) × 100%")
+    
+    # Baris kedua untuk Total Jam Kerja
+    col_stat6, col_stat7 = st.columns(2)
+    
+    # Hitung jumlah record yang digunakan untuk perhitungan
+    total_records_with_hours = len(filtered_df[filtered_df['Real Working Hour Decimal'] > 0])
+    
+    with col_stat6:
+        help_text_real = (
+            f"Formula: SUM(Real Working Hour Decimal)\n"
+            f"Penjelasan: Menjumlahkan semua jam kerja real dari semua record absensi\n"
+            f"Total Record: {len(filtered_df):,} record\n"
+            f"Record dengan Jam Kerja: {total_records_with_hours:,} record\n"
+            f"Hasil {total_jam_kerja_real_formatted} menunjukkan total jam kerja aktual dari semua record"
+        )
+        st.metric("Total Jam Kerja", total_jam_kerja_real_formatted, help=help_text_real)
+    
+    with col_stat7:
+        help_text_plant = (
+            f"Formula: Total Work Day × 8 jam\n"
+            f"Penjelasan: Total jam kerja ideal (Plant) = {total_work_day} × 8 = {total_jam_kerja_plant:.2f} jam\n"
+            f"Ini adalah total jam kerja ideal jika semua karyawan bekerja 8 jam per hari kerja"
+        )
+        st.metric("Plant Jam Kerja", total_jam_kerja_plant_formatted, help=help_text_plant)
+    
+    # Perbandingan Plant vs Actual
+    st.markdown("### 📊 Perbandingan Plant vs Actual")
+    
+    # Hitung Plant (ideal): Total Work Day × 8 jam
+    # Total Work Day sudah = Total Karyawan × Work Day
+    # Jadi Plant = Total Work Day × 8 jam (tidak perlu dikalikan lagi dengan Total Karyawan)
+    plant_total_hours = total_work_day * 8
+    plant_total_formatted = format_hours(plant_total_hours)
+    
+    # Hitung selisih dan persentase
+    selisih_hours = total_jam_kerja_real - plant_total_hours
+    persentase = (total_jam_kerja_real / plant_total_hours * 100) if plant_total_hours > 0 else 0
+    selisih_formatted = format_hours(abs(selisih_hours))
+    delta_color = "normal" if selisih_hours >= 0 else "inverse"
+    
+    col_plant1, col_plant2, col_plant3 = st.columns(3)
+    
+    with col_plant1:
+        st.metric(
+            "Plant (Ideal)",
+            plant_total_formatted,
+            help=f"Formula: Total Work Day × 8 jam\n= {total_work_day} × 8 = {plant_total_hours:.2f} jam\nTotal Work Day = {total_employees} karyawan × {work_days_month} hari = {total_work_day}\nIni adalah total jam kerja ideal jika semua karyawan bekerja 8 jam per hari kerja"
+        )
+    
+    with col_plant2:
+        st.metric(
+            "Actual (Real)",
+            total_jam_kerja_real_formatted,
+            help=f"Formula: SUM dari Analisis Per Karyawan (Real Working Hour Decimal)\n= {total_jam_kerja_real:.2f} jam\nIni adalah total jam kerja aktual dari data absensi yang dihitung per karyawan"
+        )
+    
+    with col_plant3:
+        st.metric(
+            "Selisih",
+            f"{selisih_formatted} ({persentase:.1f}%)",
+            delta=f"{selisih_hours:+.2f} jam",
+            delta_color=delta_color,
+            help=f"Selisih: Actual - Plant\n= {total_jam_kerja_real:.2f} - {plant_total_hours:.2f} = {selisih_hours:+.2f} jam\nPersentase: (Actual / Plant) × 100% = {persentase:.1f}%"
+        )
     
     # Download Ringkasan Statistik
     summary_data = {
-        'Metrik': ['Total Karyawan', 'Total Record Absensi', 'Total Kehadiran', 'Total Keterlambatan', 'Total Early Out'],
-        'Nilai': [total_employees, total_records, total_present, total_late, total_early_out]
+        'Metrik': ['Total Karyawan', 'Work Day', 'Total Work Day', 'Total Kehadiran', 'Total Kehadiran (%)', 'Total Tidak Hadir', 'Total Tidak Hadir (%)', 'Total Jam Kerja', 'Plant Jam Kerja'],
+        'Nilai': [total_employees, work_days_month, total_work_day, total_present, f"{attendance_percentage:.2f}%", total_absent, f"{absent_percentage:.2f}%", total_jam_kerja_real_formatted, total_jam_kerja_plant_formatted]
     }
     summary_df = pd.DataFrame(summary_data)
     csv_summary = summary_df.to_csv(index=False)
@@ -974,33 +1156,7 @@ if df is not None:
     # Analisis per karyawan
     st.header("👥 Analisis Per Karyawan")
     
-    # Hitung work days bulan ini (hari kerja Senin-Jumat)
-    def calculate_work_days(year, month):
-        """Hitung jumlah hari kerja (Senin-Jumat) dalam bulan tertentu"""
-        from calendar import monthrange
-        import datetime
-        
-        # Dapatkan jumlah hari dalam bulan
-        num_days = monthrange(year, month)[1]
-        
-        # Hitung hari kerja (Senin=0, Jumat=4)
-        work_days = 0
-        for day in range(1, num_days + 1):
-            date = datetime.date(year, month, day)
-            # 0 = Senin, 4 = Jumat
-            if date.weekday() < 5:  # Senin sampai Jumat
-                work_days += 1
-        
-        return work_days
-    
-    # Dapatkan tahun dan bulan dari data
-    if not filtered_df['Date'].empty:
-        first_date = filtered_df['Date'].min()
-        year = first_date.year
-        month = first_date.month
-        work_days_month = calculate_work_days(year, month)
-    else:
-        work_days_month = 0
+    # work_days_month sudah dihitung di atas untuk Ringkasan Statistik
     
     # Group by Employee
     employee_stats = filtered_df.groupby(['Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position']).agg({
@@ -1011,7 +1167,6 @@ if df is not None:
         'Is Late In': 'sum',
         'Is Early Out': 'sum',
         'Real Working Hour Decimal': 'sum',
-        'Actual Working Hour Decimal': 'sum',
         'Late In Decimal': 'sum',
         'Early Out Decimal': 'sum'
     }).reset_index()
@@ -1020,41 +1175,67 @@ if df is not None:
         'Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position',
         'Jumlah Hadir', 'Jumlah Absen', 'Jumlah Hari Libur', 'Jumlah Cuti',
         'Jumlah Late In', 'Jumlah Early Out',
-        'Total Jam Kerja (Real)', 'Total Jam Kerja (Actual)',
+        'Total Jam Kerja (Real)',
         'Total Jam Late In', 'Total Jam Early Out'
     ]
     
     # Tambahkan work days bulan ini
     employee_stats['Work Days Bulan Ini'] = work_days_month
     
+    # Hitung Total Jam Kerja (Plant) = Work Days Bulan Ini × 8 jam
+    employee_stats['Total Jam Kerja (Plant)'] = employee_stats['Work Days Bulan Ini'] * 8
+    
     # Format jam kerja
     def format_hours(hours):
-        """Format jam desimal ke HH:MM"""
+        """Format jam desimal ke format yang mudah dibaca"""
         h = int(hours)
         m = int((hours - h) * 60)
-        return f"{h:02d}:{m:02d}"
+        if m > 0:
+            return f"{h:,} jam {m} menit"
+        else:
+            return f"{h:,} jam"
     
     employee_stats['Total Jam Kerja (Real) Formatted'] = employee_stats['Total Jam Kerja (Real)'].apply(format_hours)
-    employee_stats['Total Jam Kerja (Actual) Formatted'] = employee_stats['Total Jam Kerja (Actual)'].apply(format_hours)
+    employee_stats['Total Jam Kerja (Plant) Formatted'] = employee_stats['Total Jam Kerja (Plant)'].apply(format_hours)
     employee_stats['Total Jam Late In Formatted'] = employee_stats['Total Jam Late In'].apply(format_hours)
     employee_stats['Total Jam Early Out Formatted'] = employee_stats['Total Jam Early Out'].apply(format_hours)
     
-    # Tampilkan tabel (dengan Branch dan Organization untuk display di UI)
+    # Hitung checklist dan kekurangan jam kerja
+    # Checklist: ✅ (hijau) jika Real >= Plant, ❌ (merah) jika Real < Plant
+    employee_stats['Checklist Plant'] = employee_stats.apply(
+        lambda row: '✅' if row['Total Jam Kerja (Real)'] >= row['Total Jam Kerja (Plant)'] else '❌',
+        axis=1
+    )
+    
+    # Kekurangan jam kerja: Plant - Real (jika Real < Plant), 0 jika sudah memenuhi
+    employee_stats['Kekurangan Jam Kerja'] = employee_stats.apply(
+        lambda row: max(0, row['Total Jam Kerja (Plant)'] - row['Total Jam Kerja (Real)']),
+        axis=1
+    )
+    
+    # Format kekurangan jam kerja
+    employee_stats['Kekurangan Jam Kerja Formatted'] = employee_stats['Kekurangan Jam Kerja'].apply(
+        lambda x: format_hours(x) if x > 0 else '0 jam'
+    )
+    
+    # Tampilkan tabel (tanpa Branch dan Hari Libur)
     display_cols = [
-        'Employee ID', 'Full Name', 'Branch', 'Organization', 'Job Position',
-        'Work Days Bulan Ini', 'Jumlah Hadir', 'Jumlah Absen', 'Jumlah Hari Libur', 'Jumlah Cuti',
+        'Employee ID', 'Full Name', 'Organization', 'Job Position',
+        'Work Days Bulan Ini', 'Jumlah Hadir', 'Jumlah Absen', 'Jumlah Cuti',
         'Jumlah Late In', 'Jumlah Early Out',
-        'Total Jam Kerja (Real) Formatted', 'Total Jam Kerja (Actual) Formatted',
+        'Total Jam Kerja (Real) Formatted', 'Total Jam Kerja (Plant) Formatted',
+        'Checklist Plant', 'Kekurangan Jam Kerja Formatted',
         'Total Jam Late In Formatted', 'Total Jam Early Out Formatted'
     ]
     
     # Rename untuk display
     display_df = employee_stats[display_cols].copy()
     display_df.columns = [
-        'ID', 'Nama', 'Branch', 'Organization', 'Posisi',
-        'Work Days Bulan Ini', 'Jumlah Hadir', 'Jumlah Absen', 'Hari Libur', 'Cuti',
+        'ID', 'Nama', 'Organization', 'Posisi',
+        'Work Days Bulan Ini', 'Jumlah Hadir', 'Jumlah Absen', 'Cuti',
         'Late In', 'Early Out',
-        'Total Jam Kerja (Real)', 'Total Jam Kerja (Actual)',
+        'Total Jam Kerja (Real)', 'Total Jam Kerja (Plant)',
+        'Checklist Plant', 'Kekurangan Jam Kerja',
         'Total Jam Late In', 'Total Jam Early Out'
     ]
     
