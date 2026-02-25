@@ -225,32 +225,33 @@ def render_dashboard_personal():
             plant_hours_personal = emp_data['Total Jam Kerja (Plan)']
             actual_hours_personal = emp_data['Total Jam Kerja (Real)']
             selisih_personal = actual_hours_personal - plant_hours_personal
-            persentase_personal = (actual_hours_personal / plant_hours_personal * 100) if plant_hours_personal > 0 else 0
+            persentase_actual_personal = (actual_hours_personal / plant_hours_personal * 100) if plant_hours_personal > 0 else 0
+            persentase_selisih_personal = persentase_actual_personal - 100
             
             col_plant1, col_plant2, col_plant3 = st.columns(3)
             
             with col_plant1:
                 st.metric(
                     "Plan (Ideal)",
-                    emp_data['Total Jam Kerja (Plan) Formatted'],
+                    f"{emp_data['Total Jam Kerja (Plan) Formatted']} (100%)",
                     help=f"Total jam kerja ideal: {work_days_month} hari × 8 jam = {plant_hours_personal:.2f} jam"
                 )
             
             with col_plant2:
                 st.metric(
                     "Actual (Real)",
-                    emp_data['Total Jam Kerja (Real) Formatted'],
-                    help=f"Total jam kerja aktual dari data absensi"
+                    f"{emp_data['Total Jam Kerja (Real) Formatted']} ({persentase_actual_personal:.1f}%)",
+                    help=f"Total jam kerja aktual. Pencapaian vs plan: {persentase_actual_personal:.1f}%"
                 )
             
             with col_plant3:
                 delta_color = "normal" if selisih_personal >= 0 else "inverse"
                 st.metric(
                     "Selisih",
-                    f"{format_hours(abs(selisih_personal))} ({persentase_personal:.1f}%)",
+                    f"{format_hours(abs(selisih_personal))} ({persentase_selisih_personal:+.1f}%)",
                     delta=f"{selisih_personal:+.2f} jam",
                     delta_color=delta_color,
-                    help=f"Selisih: Actual - Plan = {selisih_personal:+.2f} jam"
+                    help=f"Selisih: Actual - Plan = {selisih_personal:+.2f} jam. Persentase selisih: {persentase_selisih_personal:+.1f}%"
                 )
     else:
         st.error("Gagal memuat data. Pastikan file january.csv ada di direktori yang sama.")

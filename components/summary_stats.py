@@ -191,7 +191,8 @@ def render_summary_stats(filtered_df, work_days_month, employee_stats_full, sele
     
     # Hitung selisih dan persentase
     selisih_hours = total_jam_kerja_real - plant_total_hours
-    persentase = (total_jam_kerja_real / plant_total_hours * 100) if plant_total_hours > 0 else 0
+    persentase_actual = (total_jam_kerja_real / plant_total_hours * 100) if plant_total_hours > 0 else 0
+    persentase_selisih = persentase_actual - 100  # % di atas/bawah plan
     selisih_formatted = format_hours(abs(selisih_hours))
     delta_color = "normal" if selisih_hours >= 0 else "inverse"
     
@@ -200,24 +201,24 @@ def render_summary_stats(filtered_df, work_days_month, employee_stats_full, sele
     with col_plant1:
         st.metric(
             "Plan (Ideal)",
-            plant_total_formatted,
-            help=f"Formula: Total Work Day × 8 jam\n= {total_work_day} × 8 = {plant_total_hours:.2f} jam\nTotal Work Day = {total_employees} karyawan × {work_days_month} hari = {total_work_day}\nIni adalah total jam kerja ideal jika semua karyawan bekerja 8 jam per hari kerja"
+            f"{plant_total_formatted} (100%)",
+            help=f"Formula: Total Work Day × 8 jam\n= {total_work_day} × 8 = {plant_total_hours:.2f} jam\nTotal Work Day = {total_employees} karyawan × {work_days_month} hari = {total_work_day}\n100% = baseline referensi"
         )
     
     with col_plant2:
         st.metric(
             "Actual (Real)",
-            total_jam_kerja_real_formatted,
-            help=f"Formula: SUM dari Analisis Per Karyawan (Real Working Hour Decimal)\n= {total_jam_kerja_real:.2f} jam\nIni adalah total jam kerja aktual dari data absensi yang dihitung per karyawan"
+            f"{total_jam_kerja_real_formatted} ({persentase_actual:.1f}%)",
+            help=f"Formula: SUM dari Analisis Per Karyawan (Real Working Hour Decimal)\n= {total_jam_kerja_real:.2f} jam\nPersentase: (Actual / Plan) × 100% = {persentase_actual:.1f}%"
         )
     
     with col_plant3:
         st.metric(
             "Selisih",
-            f"{selisih_formatted} ({persentase:.1f}%)",
+            f"{selisih_formatted} ({persentase_selisih:+.1f}%)",
             delta=f"{selisih_hours:+.2f} jam",
             delta_color=delta_color,
-            help=f"Selisih: Actual - Plan\n= {total_jam_kerja_real:.2f} - {plant_total_hours:.2f} = {selisih_hours:+.2f} jam\nPersentase: (Actual / Plan) × 100% = {persentase:.1f}%"
+            help=f"Selisih: Actual - Plan\n= {total_jam_kerja_real:.2f} - {plant_total_hours:.2f} = {selisih_hours:+.2f} jam\nPersentase selisih: Actual% - 100% = {persentase_selisih:+.1f}% (positif = di atas plan, negatif = di bawah plan)"
         )
     
     # Download Ringkasan Statistik

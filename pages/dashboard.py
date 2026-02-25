@@ -44,7 +44,7 @@ def render_dashboard():
         render_summary_stats(filtered_df, work_days_month, employee_stats_full, selected_branch, selected_org)
         
         # Render Visualizations
-        render_visualizations(employee_stats_full, selected_branch)
+        render_visualizations(employee_stats_full, selected_branch, work_days_month)
     else:
         st.error("Gagal memuat data. Pastikan file january.csv ada di direktori yang sama.")
 
