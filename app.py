@@ -41,9 +41,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state for navigation
+# Initialize session state for navigation and month
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'landing'
+if 'selected_month' not in st.session_state:
+    st.session_state.selected_month = 'january'
 
 # Navigation function
 def navigate_to(page):
@@ -137,9 +139,24 @@ st.markdown("""
 # Main app logic
 if st.session_state.current_page == 'landing':
     # Landing Page
-    st.title("📊 Audit & Analisis Data Absensi - Januari 2026")
+    st.title("📊 Audit & Analisis Data Absensi")
     st.markdown("---")
-    
+
+    # Pilihan periode data (Januari / Februari)
+    month_options = {'january': 'Januari 2026', 'february': 'Februari 2026'}
+    month_list = list(month_options.keys())
+    default_idx = month_list.index(st.session_state.selected_month) if st.session_state.selected_month in month_options else 0
+    selected_month_landing = st.selectbox(
+        "Pilih periode data",
+        options=month_list,
+        format_func=lambda x: month_options[x],
+        index=default_idx,
+        key="landing_month"
+    )
+    st.session_state.selected_month = selected_month_landing
+    st.caption(f"Periode yang dipilih: **{month_options[selected_month_landing]}**")
+    st.markdown("---")
+
     st.markdown("""
     <div style='text-align: center; margin-bottom: 3rem;'>
         <h2>Selamat Datang di Sistem Audit & Analisis Absensi</h2>

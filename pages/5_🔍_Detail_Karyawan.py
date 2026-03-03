@@ -2,7 +2,7 @@
 import streamlit as st
 from utils.data_loader import load_data, filter_data
 from utils.calculations import calculate_work_days, calculate_employee_stats
-from components.sidebar import render_sidebar_filters
+from components.sidebar import render_sidebar_month, render_sidebar_filters
 from components.employee_detail import render_employee_detail
 from utils.formatters import format_hours
 
@@ -15,11 +15,10 @@ st.set_page_config(
 st.title("🔍 Detail Per Karyawan")
 st.markdown("---")
 
-# Load data
-df = load_data()
+selected_month = render_sidebar_month()
+df = load_data(selected_month)
 
 if df is not None:
-    # Sidebar untuk filter
     selected_branch, selected_org = render_sidebar_filters(df)
     
     # Filter data
@@ -60,5 +59,5 @@ if df is not None:
     # Render Employee Detail
     render_employee_detail(employee_stats, filtered_df)
 else:
-    st.error("Gagal memuat data. Pastikan file january.csv ada di direktori yang sama.")
+    st.error("Gagal memuat data. Pastikan file CSV bulan yang dipilih ada di folder project.")
 

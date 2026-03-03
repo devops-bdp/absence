@@ -3,20 +3,30 @@ import pandas as pd
 from calendar import monthrange
 import datetime
 
+# Hari libur per bulan (tanggal): (year, month) -> [list of day of month]
+# Hanya tanggal yang termasuk hari kerja (Senin–Jumat) yang mengurangi Work Day.
+HOLIDAYS_BY_MONTH = {
+    (2026, 2): [1, 7, 8, 14, 15, 16, 17, 21, 22, 28],  # Februari 2026
+}
+
+
+def get_work_days_holidays(year, month):
+    """Daftar tanggal hari libur di bulan tersebut (untuk referensi)."""
+    return HOLIDAYS_BY_MONTH.get((year, month), [])
+
 
 def calculate_work_days(year, month):
-    """Hitung jumlah hari kerja (Senin-Jumat) dalam bulan tertentu"""
-    # Dapatkan jumlah hari dalam bulan
+    """Hitung jumlah hari kerja (Senin-Jumat) dalam bulan tertentu, dikurangi hari libur."""
     num_days = monthrange(year, month)[1]
-    
-    # Hitung hari kerja (Senin=0, Jumat=4)
     work_days = 0
+    holiday_dates = HOLIDAYS_BY_MONTH.get((year, month), [])
+
     for day in range(1, num_days + 1):
         date = datetime.date(year, month, day)
-        # 0 = Senin, 4 = Jumat
         if date.weekday() < 5:  # Senin sampai Jumat
-            work_days += 1
-    
+            if day not in holiday_dates:
+                work_days += 1
+
     return work_days
 
 

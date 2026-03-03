@@ -83,7 +83,6 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
     persentase_actual = (total_jam_kerja_real / plant_total_hours * 100) if plant_total_hours > 0 else 0
     persentase_selisih = persentase_actual - 100
     selisih_formatted = format_hours(abs(selisih_hours))
-    delta_color = "normal" if selisih_hours >= 0 else "inverse"
     
     col_plant1, col_plant2, col_plant3 = st.columns(3)
     
@@ -105,9 +104,12 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
         st.metric(
             "Selisih",
             f"{selisih_formatted} ({persentase_selisih:+.1f}%)",
-            delta=f"{selisih_hours:+.2f} jam",
-            delta_color=delta_color,
             help=f"Selisih: Actual - Plan = {selisih_hours:+.2f} jam\nPersentase selisih: {persentase_selisih:+.1f}% (positif = di atas plan, negatif = di bawah plan)"
+        )
+        # Highlight selisih jam dengan warna kuning (bukan hijau/merah)
+        st.markdown(
+            f"<p style='margin-top: -0.5rem; color: #B8860B; font-weight: 600; font-size: 0.95rem;'>{selisih_hours:+.2f} jam</p>",
+            unsafe_allow_html=True
         )
     
     # Download Ringkasan Statistik Personal

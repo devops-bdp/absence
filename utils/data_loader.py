@@ -3,11 +3,22 @@ import pandas as pd
 import streamlit as st
 
 
+# Map bulan ke nama file CSV
+MONTH_FILES = {
+    'january': 'january.csv',
+    'february': 'february.csv',
+}
+
+# Nama karyawan yang dikecualikan dari analisis (mis. Direktur)
+EXCLUDED_EMPLOYEE_NAMES = {'Sumardi','Henri Hendriansah','Iwan'}
+
+
 @st.cache_data
-def load_data():
-    """Load dan clean data dari CSV"""
+def load_data(month='january'):
+    """Load dan clean data dari CSV. month: 'january' atau 'february'."""
     try:
-        df = pd.read_csv('january.csv')
+        filename = MONTH_FILES.get(month, 'january.csv')
+        df = pd.read_csv(filename)
         
         # Filter baris yang bukan TOTAL (baris yang berisi "TOTAL FOR EMPLOYEE")
         df = df[~df['Employee ID'].astype(str).str.contains('TOTAL', na=False)]
@@ -84,16 +95,22 @@ def load_data():
         )
         
         return df
+    except FileNotFoundError:
+        st.error(f"File data tidak ditemukan: {filename}. Pastikan file ada di folder project.")
+        return None
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
 
 
 def filter_data(df, branch, org):
-    """Filter data berdasarkan branch dan organization"""
+    """Filter data berdasarkan branch dan organization. Mengecualikan nama di EXCLUDED_EMPLOYEE_NAMES (mis. Direktur)."""
     filtered_df = df[df['Branch'] == branch].copy()
     if org != 'All':
         filtered_df = filtered_df[filtered_df['Organization'] == org]
+    # Exclude karyawan tertentu (mis. Direktur) dari analisis
+    if EXCLUDED_EMPLOYEE_NAMES and 'Full Name' in filtered_df.columns:
+        filtered_df = filtered_df[~filtered_df['Full Name'].astype(str).str.strip().isin(EXCLUDED_EMPLOYEE_NAMES)]
     return filtered_df
 
 

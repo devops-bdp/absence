@@ -2,7 +2,7 @@
 import streamlit as st
 from utils.data_loader import load_data, filter_data
 from utils.calculations import calculate_work_days, calculate_employee_stats
-from components.sidebar import render_sidebar_filters
+from components.sidebar import render_sidebar_month, render_sidebar_filters
 from utils.formatters import format_hours
 import plotly.express as px
 import plotly.graph_objects as go
@@ -12,11 +12,10 @@ def render_dashboard_personal():
     st.title("📊 Dashboard Personal")
     st.markdown("---")
 
-    # Load data
-    df = load_data()
+    selected_month = render_sidebar_month()
+    df = load_data(selected_month)
 
     if df is not None:
-        # Sidebar untuk filter
         selected_branch, selected_org = render_sidebar_filters(df)
         
         # Filter data
@@ -254,5 +253,5 @@ def render_dashboard_personal():
                     help=f"Selisih: Actual - Plan = {selisih_personal:+.2f} jam. Persentase selisih: {persentase_selisih_personal:+.1f}%"
                 )
     else:
-        st.error("Gagal memuat data. Pastikan file january.csv ada di direktori yang sama.")
+        st.error("Gagal memuat data. Pastikan file CSV bulan yang dipilih ada di folder project.")
 

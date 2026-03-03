@@ -6,12 +6,12 @@ from utils.calculations import calculate_employee_stats
 from reports.pdf_report import create_table_pdf
 
 
-def render_summary_stats(filtered_df, work_days_month, employee_stats_full, selected_branch, selected_org):
-    """Render ringkasan statistik"""
+def render_summary_stats(filtered_df, work_days_month, employee_stats_full, selected_branch, selected_org, total_employees_baseline=None):
+    """Render ringkasan statistik. total_employees_baseline: jika diisi (mis. dari Januari), dipakai untuk Total Karyawan dan Total Work Day."""
     st.header("📈 Ringkasan Statistik")
-    
-    # Hitung semua metrik
-    total_employees = filtered_df['Employee ID'].nunique()
+
+    # Total Karyawan: pakai baseline (Januari) jika ada, agar konsisten antar bulan
+    total_employees = total_employees_baseline if total_employees_baseline is not None else filtered_df['Employee ID'].nunique()
     total_present = filtered_df['Is Present'].sum()
     total_absent = filtered_df['Is Absent'].sum()
     total_leave = filtered_df['Is Leave'].sum()
@@ -55,7 +55,8 @@ def render_summary_stats(filtered_df, work_days_month, employee_stats_full, sele
     col_stat1, col_stat2, col_stat3, col_stat4, col_stat5, col_stat6 = st.columns(6)
     
     with col_stat1:
-        st.metric("Total Karyawan", total_employees, help="Formula: COUNT(DISTINCT Employee ID)")
+        help_total = "Formula: COUNT(DISTINCT Employee ID). Baseline Januari dipakai agar konsisten di semua bulan." if total_employees_baseline is not None else "Formula: COUNT(DISTINCT Employee ID)"
+        st.metric("Total Karyawan", total_employees, help=help_total)
     with col_stat2:
         st.metric("Work Day", work_days_month, help="Formula: Jumlah hari kerja (Senin-Jumat) dalam bulan")
     with col_stat3:
