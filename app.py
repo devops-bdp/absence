@@ -136,10 +136,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Path logo (company & point company)
+LOGO_BDP = "public/bdplogo.png"
+LOGO_STRIVE = "public/strive.png"
+
 # Main app logic
 if st.session_state.current_page == 'landing':
-    # Landing Page
-    st.title("📊 Audit & Analisis Data Absensi")
+    # Landing Page - Logo perusahaan & STRiVe berdampingan, judul di bawahnya
+    try:
+        col_logo_left, col_logo_spacer, col_logo_right = st.columns([1, 0.2, 1])
+        with col_logo_left:
+            st.image(LOGO_BDP, width=260)
+        with col_logo_right:
+            st.image(LOGO_STRIVE, width=260)
+    except Exception:
+        pass
+
+    st.markdown(
+        "<div style='text-align: center; margin-top: 1rem;'>"
+        "<h1>📊 Audit & Analisis Data Absensi</h1>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
     st.markdown("---")
 
     # Pilihan periode data (Januari / Februari)
@@ -194,19 +212,7 @@ if st.session_state.current_page == 'landing':
             if st.button("✅ Buka Checklist", key="btn_checklist", use_container_width=True):
                 navigate_to('checklist')
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Employee Analysis Card
-        with st.container():
-            st.markdown("""
-            <div class="landing-card-container card-analysis">
-                <div class="card-icon">👥</div>
-                <div class="card-title">Analisis Karyawan</div>
-                <div class="card-description">Analisis detail per karyawan dengan metrik lengkap</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("👥 Buka Analisis", key="btn_analysis", use_container_width=True):
-                navigate_to('analysis')
+        # (Card Analisis Karyawan dihapus sesuai permintaan)
     
     with col2:
         # Employee Detail Card
