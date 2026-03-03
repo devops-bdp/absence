@@ -2,6 +2,8 @@
 import pandas as pd
 import streamlit as st
 
+from utils.calculations import get_work_days_holidays
+
 
 # Map bulan ke nama file CSV
 MONTH_FILES = {
@@ -77,8 +79,16 @@ def load_data(month='january'):
         )
         
         # Tentukan kategori status
-        # Hari libur: Shift = 'dayoff'
-        df['Is Dayoff'] = df['Shift'].str.contains('dayoff', case=False, na=False)
+        # Hari libur: Shift = 'dayoff' + hari libur yang dikonfigurasi (mis. list hari libur per bulan)
+        if df['Date'].notna().any():
+            year_mode = int(df['Date'].dt.year.mode()[0])
+            month_mode = int(df['Date'].dt.month.mode()[0])
+            holiday_days = set(get_work_days_holidays(year_mode, month_mode))
+            is_holiday_config = df['Date'].dt.day.isin(holiday_days)
+        else:
+            is_holiday_config = False
+
+        df['Is Dayoff'] = df['Shift'].str.contains('dayoff', case=False, na=False) | is_holiday_config
         
         # Cuti: Attendance Code = 'CT' atau Time Off Code = 'CT' atau Shift = 'Roster Leave'
         df['Is Leave'] = (
