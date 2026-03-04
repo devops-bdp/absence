@@ -3,6 +3,18 @@ import streamlit as st
 
 # Opsi bulan (value -> label)
 MONTH_OPTIONS = [
+    # 2025
+    ('2025-03', 'Maret 2025'),
+    ('2025-04', 'April 2025'),
+    ('2025-05', 'Mei 2025'),
+    ('2025-06', 'Juni 2025'),
+    ('2025-07', 'Juli 2025'),
+    ('2025-08', 'Agustus 2025'),
+    ('2025-09', 'September 2025'),
+    ('2025-10', 'Oktober 2025'),
+    ('2025-11', 'November 2025'),
+    ('2025-12', 'Desember 2025'),
+    # 2026
     ('january', 'Januari 2026'),
     ('february', 'Februari 2026'),
 ]

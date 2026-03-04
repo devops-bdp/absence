@@ -160,8 +160,21 @@ if st.session_state.current_page == 'landing':
     )
     st.markdown("---")
 
-    # Pilihan periode data (Januari / Februari)
-    month_options = {'january': 'Januari 2026', 'february': 'Februari 2026'}
+    # Pilihan periode data (2025–2026)
+    month_options = {
+        '2025-03': 'Maret 2025',
+        '2025-04': 'April 2025',
+        '2025-05': 'Mei 2025',
+        '2025-06': 'Juni 2025',
+        '2025-07': 'Juli 2025',
+        '2025-08': 'Agustus 2025',
+        '2025-09': 'September 2025',
+        '2025-10': 'Oktober 2025',
+        '2025-11': 'November 2025',
+        '2025-12': 'Desember 2025',
+        'january': 'Januari 2026',
+        'february': 'Februari 2026',
+    }
     month_list = list(month_options.keys())
     default_idx = month_list.index(st.session_state.selected_month) if st.session_state.selected_month in month_options else 0
     selected_month_landing = st.selectbox(

@@ -221,14 +221,18 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         with stat_col4:
             st.metric("🏖️ Hari Libur", int(emp_data['Jumlah Hari Libur']), help="Total hari libur")
         
-        stat_col5, stat_col6, stat_col7, stat_col8 = st.columns(4)
+        # Baris kedua: Cuti, Sakit, Late In, Early Out, Total Jam Kerja
+        stat_col5, stat_col6, stat_col7, stat_col8, stat_col9 = st.columns(5)
         with stat_col5:
             st.metric("✈️ Cuti", int(emp_data['Jumlah Cuti']), help="Total hari cuti")
         with stat_col6:
-            st.metric("⏰ Late In", int(emp_data['Jumlah Late In']), delta_color="inverse", help="Jumlah keterlambatan")
+            total_sick = int(emp_detail['Is Sick'].sum()) if 'Is Sick' in emp_detail.columns else 0
+            st.metric("🤒 Sakit", total_sick, help="Total hari sakit (Attendance Code / Time Off Code = 'S')")
         with stat_col7:
-            st.metric("🚪 Early Out", int(emp_data['Jumlah Early Out']), delta_color="inverse", help="Jumlah pulang lebih cepat")
+            st.metric("⏰ Late In", int(emp_data['Jumlah Late In']), delta_color="inverse", help="Jumlah keterlambatan")
         with stat_col8:
+            st.metric("🚪 Early Out", int(emp_data['Jumlah Early Out']), delta_color="inverse", help="Jumlah pulang lebih cepat")
+        with stat_col9:
             st.metric("⏱️ Total Jam Kerja", emp_data['Total Jam Kerja (Real) Formatted'], help="Total jam kerja (Real Working Hour)")
         
         # Hitung Total Work 8 Hours dan Total Clock Under 08.15

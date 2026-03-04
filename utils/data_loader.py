@@ -6,9 +6,21 @@ from utils.calculations import get_work_days_holidays
 
 
 # Map bulan ke nama file CSV
+# 2025: Maret–Desember, 2026: Januari–Februari (bisa ditambah nanti jika ada file baru)
 MONTH_FILES = {
-    'january': 'january.csv',
-    'february': 'february.csv',
+    # 2025 - nama file bahasa Indonesia
+    '2025-03': '2025/maret.csv',
+    '2025-04': '2025/april.csv',
+    '2025-05': '2025/mei.csv',
+    '2025-06': '2025/juni.csv',
+    '2025-07': '2025/juli.csv',
+    '2025-08': '2025/agustus.csv',
+    '2025-09': '2025/september.csv',
+    '2025-10': '2025/oktober.csv',
+    '2025-11': '2025/november.csv',
+    '2025-12': '2025/desember.csv',
+    'january': '2026/january.csv',   # Januari 2026
+    'february': '2026/february.csv', # Februari 2026
 }
 
 # Nama karyawan yang dikecualikan dari analisis (mis. Direktur)
@@ -17,10 +29,26 @@ EXCLUDED_EMPLOYEE_NAMES = {'Sumardi','Henri Hendriansah','Iwan'}
 
 @st.cache_data
 def load_data(month='january'):
-    """Load dan clean data dari CSV. month: 'january' atau 'february'."""
+    """Load dan clean data dari CSV. Parameter month mengacu ke key di MONTH_FILES."""
     try:
-        filename = MONTH_FILES.get(month, 'january.csv')
+        # Default fallback ke Januari 2026 jika key tidak dikenal
+        filename = MONTH_FILES.get(month, MONTH_FILES['january'])
         df = pd.read_csv(filename)
+
+        # Normalisasi nama kolom (hilangkan spasi dan tanda * di akhir seperti 'Employee ID*', 'Date*', dst.)
+        df.columns = (
+            df.columns
+            .str.strip()
+            .str.replace('*', '', regex=False)
+        )
+
+        # Simpan daftar kolom asli (setelah normalisasi) sebelum menambah kolom default
+        original_time_cols = set(df.columns)
+
+        # Pastikan kolom waktu yang dipakai di pipeline selalu ada
+        for col in ['Real Working Hour', 'Actual Working Hour', 'Late In', 'Early Out']:
+            if col not in df.columns:
+                df[col] = '00:00'
         
         # Filter baris yang bukan TOTAL (baris yang berisi "TOTAL FOR EMPLOYEE")
         df = df[~df['Employee ID'].astype(str).str.contains('TOTAL', na=False)]
@@ -65,8 +93,24 @@ def load_data(month='january'):
                 return False
         
         # Apply parsing
-        df['Real Working Hour Decimal'] = df['Real Working Hour'].apply(parse_time_to_hours)
-        df['Actual Working Hour Decimal'] = df['Actual Working Hour'].apply(parse_time_to_hours)
+        # Jika data punya kolom 'Real Working Hour', gunakan itu.
+        # Jika tidak (seperti data 2025), hitung jam kerja dari selisih Check In dan Check Out.
+        if 'Real Working Hour' in original_time_cols:
+            df['Real Working Hour Decimal'] = df['Real Working Hour'].apply(parse_time_to_hours)
+        else:
+            df['Real Working Hour Decimal'] = df.apply(
+                lambda row: max(
+                    0.0,
+                    parse_time_to_hours(row.get('Check Out')) - parse_time_to_hours(row.get('Check In'))
+                ),
+                axis=1
+            )
+
+        if 'Actual Working Hour' in original_time_cols:
+            df['Actual Working Hour Decimal'] = df['Actual Working Hour'].apply(parse_time_to_hours)
+        else:
+            # Jika tidak ada kolom Actual, gunakan nilai Real sebagai proxy
+            df['Actual Working Hour Decimal'] = df['Real Working Hour Decimal']
         df['Late In Decimal'] = df['Late In'].apply(parse_time_to_hours)
         df['Early Out Decimal'] = df['Early Out'].apply(parse_time_to_hours)
         df['Is Late In'] = df['Late In'].apply(parse_late_early)
@@ -90,17 +134,31 @@ def load_data(month='january'):
 
         df['Is Dayoff'] = df['Shift'].str.contains('dayoff', case=False, na=False) | is_holiday_config
         
-        # Cuti: Attendance Code = 'CT' atau Time Off Code = 'CT' atau Shift = 'Roster Leave'
+        # Sakit: Attendance Code = 'S' atau Time Off Code = 'S'
+        df['Is Sick'] = (
+            (df['Attendance Code'] == 'S') |
+            (df['Time Off Code'] == 'S')
+        )
+        
+        # Cuti / izin (tidak termasuk sakit):
+        # - Attendance Code = 'CT' (Cuti)
+        # - Time Off Code = 'CT'
+        # - Attendance Code = 'CPD' (Cuti Perjalanan Dinas)
+        # - Time Off Code = 'CPD'
+        # - Shift mengandung 'Roster Leave'
         df['Is Leave'] = (
             (df['Attendance Code'] == 'CT') |
             (df['Time Off Code'] == 'CT') |
+            (df['Attendance Code'] == 'CPD') |
+            (df['Time Off Code'] == 'CPD') |
             (df['Shift'].str.contains('Roster Leave', case=False, na=False))
         )
         
-        # Tidak hadir (absen): bukan hadir, bukan cuti, bukan hari libur
+        # Tidak hadir (absen): bukan hadir, bukan cuti, bukan sakit, bukan hari libur
         df['Is Absent'] = (
             (~df['Is Present']) &
             (~df['Is Leave']) &
+            (~df['Is Sick']) &
             (~df['Is Dayoff'])
         )
         
