@@ -24,7 +24,9 @@ MONTH_FILES = {
 }
 
 # Nama karyawan yang dikecualikan dari analisis (mis. Direktur)
-EXCLUDED_EMPLOYEE_NAMES = {'Sumardi','Henri Hendriansah','Iwan'}
+EXCLUDED_EMPLOYEE_NAMES = {'Sumardi', 'Henri Hendriansah', 'Iwan'}
+# Posisi jabatan yang dikecualikan dari dropdown Pilih Karyawan & analisis (mis. Direktur)
+EXCLUDED_JOB_POSITIONS = {'Direktur'}
 
 
 @st.cache_data
@@ -172,13 +174,18 @@ def load_data(month='january'):
 
 
 def filter_data(df, branch, org):
-    """Filter data berdasarkan branch dan organization. Mengecualikan nama di EXCLUDED_EMPLOYEE_NAMES (mis. Direktur)."""
+    """Filter data berdasarkan branch dan organization. Mengecualikan nama di EXCLUDED_EMPLOYEE_NAMES dan posisi di EXCLUDED_JOB_POSITIONS (mis. Direktur)."""
     filtered_df = df[df['Branch'] == branch].copy()
     if org != 'All':
         filtered_df = filtered_df[filtered_df['Organization'] == org]
-    # Exclude karyawan tertentu (mis. Direktur) dari analisis
+    # Exclude karyawan tertentu berdasarkan nama (mis. Direktur)
     if EXCLUDED_EMPLOYEE_NAMES and 'Full Name' in filtered_df.columns:
         filtered_df = filtered_df[~filtered_df['Full Name'].astype(str).str.strip().isin(EXCLUDED_EMPLOYEE_NAMES)]
+    # Exclude berdasarkan posisi jabatan (mis. Direktur) agar tidak muncul di Pilih Karyawan
+    if EXCLUDED_JOB_POSITIONS and 'Job Position' in filtered_df.columns:
+        pos = filtered_df['Job Position'].astype(str).str.strip()
+        mask_excluded_pos = pos.str.lower().isin({p.lower() for p in EXCLUDED_JOB_POSITIONS})
+        filtered_df = filtered_df[~mask_excluded_pos]
     return filtered_df
 
 
