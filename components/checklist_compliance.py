@@ -2,19 +2,19 @@
 import streamlit as st
 import pandas as pd
 from utils.data_loader import time_to_minutes
+from utils.calculations import get_check_in_deadline_minutes
 from reports.pdf_report import create_table_pdf
 
 
 def check_in_out_time(row):
-    """Check apakah masuk <= 08:00 dan pulang >= 17:00"""
+    """Check apakah jam masuk on time (07:45 Ramadan 19–28 Feb 2026, else 08:15) dan pulang >= 17:00"""
     check_in_minutes = time_to_minutes(row['Check In'])
     check_out_minutes = time_to_minutes(row['Check Out'])
     
     if check_in_minutes is None or check_out_minutes is None:
         return '❌'
     
-    # Target: Check In <= 08:00 (480 menit) dan Check Out >= 17:00 (1020 menit)
-    target_check_in = 8 * 60 + 0  # 08:00 = 480 menit
+    target_check_in = get_check_in_deadline_minutes(row['Date'])
     target_check_out = 17 * 60 + 0  # 17:00 = 1020 menit
     
     if check_in_minutes <= target_check_in and check_out_minutes >= target_check_out:
@@ -34,12 +34,12 @@ def render_checklist_compliance(filtered_df, selected_branch):
     # Filter hanya yang hadir
     checklist_data = checklist_data[checklist_data['Is Present'] == True].copy()
     
-    # Checklist 1: Kerja selama 8 jam per hari
+    # Checklist 1: Kerja 8 jam per hari (total working hours tetap 8 jam; Ramadan istirahat 30 menit)
     checklist_data['Checklist_8_Jam'] = checklist_data['Real Working Hour Decimal'].apply(
         lambda x: '✅' if x >= 8.0 else '❌'
     )
     
-    # Checklist 2: Masuk <= 08:00 dan pulang >= 17:00
+    # Checklist 2: Jam masuk on time (07:45 tgl 19–28 Feb 2026, else 08:15) dan pulang >= 17:00
     checklist_data['Checklist_Jam_8_17'] = checklist_data.apply(check_in_out_time, axis=1)
     
     # Pilih kolom untuk checklist (dengan Branch dan Organization untuk display di UI)
@@ -84,7 +84,7 @@ def render_checklist_compliance(filtered_df, selected_branch):
     checklist_display_filtered.columns = [
         'Tanggal', 'ID', 'Nama', 'Branch', 'Organization', 'Posisi',
         'Shift', 'Check In', 'Check Out', 'Jam Kerja (Format)', 'Jam Kerja (Desimal)',
-        '✅ Kerja 8 Jam/Hari', '✅ Masuk 08:00 & Pulang 17:00'
+        '✅ Kerja 8 Jam/Hari', '✅ Jam Masuk On Time & Pulang 17:00'
     ]
     
     # Buat copy untuk download (tanpa Branch dan Organization)
@@ -94,10 +94,10 @@ def render_checklist_compliance(filtered_df, selected_branch):
     # Statistik checklist
     total_checklist = len(checklist_display_filtered)
     compliant_8jam = len(checklist_display_filtered[checklist_display_filtered['✅ Kerja 8 Jam/Hari'] == '✅'])
-    compliant_8_17 = len(checklist_display_filtered[checklist_display_filtered['✅ Masuk 08:00 & Pulang 17:00'] == '✅'])
+    compliant_8_17 = len(checklist_display_filtered[checklist_display_filtered['✅ Jam Masuk On Time & Pulang 17:00'] == '✅'])
     compliant_both = len(checklist_display_filtered[
         (checklist_display_filtered['✅ Kerja 8 Jam/Hari'] == '✅') &
-        (checklist_display_filtered['✅ Masuk 08:00 & Pulang 17:00'] == '✅')
+        (checklist_display_filtered['✅ Jam Masuk On Time & Pulang 17:00'] == '✅')
     ])
     
     col_check_stat1, col_check_stat2, col_check_stat3, col_check_stat4 = st.columns(4)
@@ -106,7 +106,7 @@ def render_checklist_compliance(filtered_df, selected_branch):
     with col_check_stat2:
         st.metric("✅ Kerja 8 Jam/Hari", f"{compliant_8jam} ({(compliant_8jam/total_checklist*100) if total_checklist > 0 else 0:.1f}%)")
     with col_check_stat3:
-        st.metric("✅ Masuk 08:00 & Pulang 17:00", f"{compliant_8_17} ({(compliant_8_17/total_checklist*100) if total_checklist > 0 else 0:.1f}%)")
+        st.metric("✅ Jam Masuk On Time & Pulang 17:00", f"{compliant_8_17} ({(compliant_8_17/total_checklist*100) if total_checklist > 0 else 0:.1f}%)")
     with col_check_stat4:
         st.metric("✅ Keduanya Compliant", f"{compliant_both} ({(compliant_both/total_checklist*100) if total_checklist > 0 else 0:.1f}%)")
     

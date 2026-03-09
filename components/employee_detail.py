@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from utils.data_loader import parse_check_in_to_minutes
 from utils.formatters import format_hours
+from utils.calculations import get_check_in_deadline_minutes
 from reports.pdf_report import create_table_pdf
 
 
@@ -207,55 +208,60 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         
         st.markdown("---")
         
-        # Statistik utama
-        st.markdown("### 📊 Statistik Absensi Bulan Ini")
-        
-        stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
-        with stat_col1:
-            attendance_rate = (emp_data['Jumlah Hadir'] / emp_data['Work Days Bulan Ini'] * 100) if emp_data['Work Days Bulan Ini'] > 0 else 0
-            st.metric("📅 Work Days Bulan Ini", int(emp_data['Work Days Bulan Ini']), help="Hari kerja yang seharusnya")
-        with stat_col2:
-            st.metric("✅ Jumlah Hadir", int(emp_data['Jumlah Hadir']), delta=f"{attendance_rate:.1f}%", delta_color="normal", help="Total hari hadir")
-        with stat_col3:
-            st.metric("❌ Jumlah Absen", int(emp_data['Jumlah Absen']), delta_color="inverse", help="Total hari tidak hadir")
-        with stat_col4:
-            st.metric("🏖️ Hari Libur", int(emp_data['Jumlah Hari Libur']), help="Total hari libur")
-        
-        # Baris kedua: Cuti, Sakit, Late In, Early Out, Total Jam Kerja
-        stat_col5, stat_col6, stat_col7, stat_col8, stat_col9 = st.columns(5)
-        with stat_col5:
-            st.metric("✈️ Cuti", int(emp_data['Jumlah Cuti']), help="Total hari cuti")
-        with stat_col6:
-            total_sick = int(emp_detail['Is Sick'].sum()) if 'Is Sick' in emp_detail.columns else 0
-            st.metric("🤒 Sakit", total_sick, help="Total hari sakit (Attendance Code / Time Off Code = 'S')")
-        with stat_col7:
-            st.metric("⏰ Late In", int(emp_data['Jumlah Late In']), delta_color="inverse", help="Jumlah keterlambatan")
-        with stat_col8:
-            st.metric("🚪 Early Out", int(emp_data['Jumlah Early Out']), delta_color="inverse", help="Jumlah pulang lebih cepat")
-        with stat_col9:
-            st.metric("⏱️ Total Jam Kerja", emp_data['Total Jam Kerja (Real) Formatted'], help="Total jam kerja (Real Working Hour)")
-        
-        # Hitung Total Work 8 Hours dan Total Clock Under 08.15
+        # Statistik utama — dihitung dulu yang dipakai di beberapa metrik
         total_work_8_hours = len(emp_detail[emp_detail['Real Working Hour Decimal'] >= 8])
-        
-        # Hitung Total Clock Under 08.15 (Check In <= 08:15)
         emp_detail_with_checkin = emp_detail[emp_detail['Check In'].notna() & (emp_detail['Check In'] != '')].copy()
         if len(emp_detail_with_checkin) > 0:
             emp_detail_with_checkin['Check In Minutes'] = emp_detail_with_checkin['Check In'].apply(parse_check_in_to_minutes)
-            total_clock_under_0815 = len(emp_detail_with_checkin[emp_detail_with_checkin['Check In Minutes'].notna() & (emp_detail_with_checkin['Check In Minutes'] <= 495)])
+            emp_detail_with_checkin['Deadline Minutes'] = emp_detail_with_checkin['Date'].apply(get_check_in_deadline_minutes)
+            total_clock_on_time = len(emp_detail_with_checkin[
+                emp_detail_with_checkin['Check In Minutes'].notna() &
+                (emp_detail_with_checkin['Check In Minutes'] <= emp_detail_with_checkin['Deadline Minutes'])
+            ])
         else:
-            total_clock_under_0815 = 0
-        
-        stat_col9, stat_col10 = st.columns(2)
-        with stat_col9:
-            work_8_hours_percentage = (total_work_8_hours / len(emp_detail) * 100) if len(emp_detail) > 0 else 0
-            st.metric("⏰ Total Work 8 Hours", total_work_8_hours, delta=f"{work_8_hours_percentage:.1f}%", delta_color="normal", 
-                     help="Jumlah hari yang bekerja >= 8 jam")
-        with stat_col10:
-            clock_under_percentage = (total_clock_under_0815 / len(emp_detail) * 100) if len(emp_detail) > 0 else 0
-            st.metric("🕐 Total Clock Under 08.15", total_clock_under_0815, delta=f"{clock_under_percentage:.1f}%", delta_color="normal",
-                     help="Jumlah hari yang Check In <= 08:15")
-        
+            total_clock_on_time = 0
+        total_sick = int(emp_detail['Is Sick'].sum()) if 'Is Sick' in emp_detail.columns else 0
+        n_days = len(emp_detail)
+        attendance_rate = (emp_data['Jumlah Hadir'] / emp_data['Work Days Bulan Ini'] * 100) if emp_data['Work Days Bulan Ini'] > 0 else 0
+        work_8_pct = (total_work_8_hours / n_days * 100) if n_days > 0 else 0
+        clock_on_time_pct = (total_clock_on_time / n_days * 100) if n_days > 0 else 0
+
+        st.markdown("### 📊 Statistik Absensi Bulan Ini")
+        st.caption("Ringkasan kehadiran, pelanggaran waktu, dan jam kerja untuk bulan ini.")
+
+        # Baris 1: Kehadiran dasar (4 kolom)
+        r1_1, r1_2, r1_3, r1_4 = st.columns(4)
+        with r1_1:
+            st.metric("📅 Work Days Bulan Ini", int(emp_data['Work Days Bulan Ini']), help="Hari kerja yang seharusnya")
+        with r1_2:
+            st.metric("✅ Jumlah Hadir", int(emp_data['Jumlah Hadir']), delta=f"{attendance_rate:.1f}%", delta_color="normal", help="Total hari hadir")
+        with r1_3:
+            st.metric("❌ Jumlah Absen", int(emp_data['Jumlah Absen']), delta_color="inverse", help="Total hari tidak hadir")
+        with r1_4:
+            st.metric("🏖️ Hari Libur", int(emp_data['Jumlah Hari Libur']), help="Total hari libur")
+
+        # Baris 2: Cuti, Sakit, pelanggaran (4 kolom)
+        r2_1, r2_2, r2_3, r2_4 = st.columns(4)
+        with r2_1:
+            st.metric("✈️ Cuti", int(emp_data['Jumlah Cuti']), help="Total hari cuti")
+        with r2_2:
+            st.metric("🤒 Sakit", total_sick, help="Total hari sakit (Attendance Code = S)")
+        with r2_3:
+            st.metric("⏰ Late In", int(emp_data['Jumlah Late In']), delta_color="inverse", help="Jumlah keterlambatan")
+        with r2_4:
+            st.metric("🚪 Early Out", int(emp_data['Jumlah Early Out']), delta_color="inverse", help="Jumlah pulang lebih cepat")
+
+        # Baris 3: Jam kerja & compliance (3 kolom)
+        r3_1, r3_2, r3_3 = st.columns(3)
+        with r3_1:
+            st.metric("⏱️ Total Jam Kerja", emp_data['Total Jam Kerja (Real) Formatted'], help="Total jam kerja (Real Working Hour)")
+        with r3_2:
+            st.metric("⏰ Total Work 8 Hours", total_work_8_hours, delta=f"{work_8_pct:.1f}%", delta_color="normal",
+                     help="Hari bekerja ≥ 8 jam (Ramadan: istirahat 30 menit, total tetap 8 jam)")
+        with r3_3:
+            st.metric("🕐 Jam Masuk On Time", total_clock_on_time, delta=f"{clock_on_time_pct:.1f}%", delta_color="normal",
+                     help="Check In dalam range 07:00–07:45 (Ramadan 19–28 Feb) atau 07:00–08:15 (biasa)")
+
         st.markdown("---")
         
         # Visualisasi ringkasan
@@ -396,26 +402,19 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         
         emp_detail_filtered['Status'] = emp_detail_filtered.apply(get_status, axis=1)
         
-        # Tambahkan kolom Compliance (minimum 8 jam kerja)
-        # Compliance hanya untuk hari kerja (Hadir), untuk hari libur/cuti/absen tetap ❌
+        # Compliance: minimum 8 jam kerja per hari (Ramadan istirahat 30 menit, total tetap 8 jam)
         emp_detail_filtered['Compliance'] = emp_detail_filtered.apply(
             lambda row: '✅' if (row['Real Working Hour Decimal'] >= 8) else '❌',
             axis=1
         )
         
-        # Tambahkan kolom Check In Time Range (07:00-08:15)
-        # Jika Check In < 07:00: ✅ (tidak apa-apa)
-        # Jika Check In antara 07:00-08:15: ✅
-        # Jika Check In > 08:15: ❌
+        # Kolom Check In Range: per tanggal batas 07:45 (Ramadan 19–28 Feb 2026) atau 08:15
         def check_in_time_range(row):
             check_in_minutes = parse_check_in_to_minutes(row['Check In'])
             if check_in_minutes is None:
-                return '❌'  # Tidak ada Check In
-            # 07:00 = 420 menit, 08:15 = 495 menit
-            if check_in_minutes <= 495:  # <= 08:15
-                return '✅'
-            else:  # > 08:15
                 return '❌'
+            deadline = get_check_in_deadline_minutes(row['Date'])
+            return '✅' if check_in_minutes <= deadline else '❌'
         
         emp_detail_filtered['Check In Range'] = emp_detail_filtered.apply(check_in_time_range, axis=1)
         
@@ -426,7 +425,7 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         detail_display['Date'] = detail_display['Date'].dt.strftime('%Y-%m-%d (%A)')
         
         detail_display.columns = [
-            'Tanggal', 'Status', '8 Hour Working Time', 'In between 07.00-08.15', 'Shift', 'Check In', 'Check Out', 'Late In', 'Early Out',
+            'Tanggal', 'Status', '8 Hour Working Time', 'Jam Masuk (07.00-07.45 / 08.15)', 'Shift', 'Check In', 'Check Out', 'Late In', 'Early Out',
             'Jam Kerja (Real)', 'Jam Kerja (Actual)', 'Kode Absensi'
         ]
         

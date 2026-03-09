@@ -6,6 +6,7 @@ import datetime
 # Hari libur per bulan (tanggal): (year, month) -> [list of day of month]
 # Hanya tanggal yang termasuk hari kerja (Senin–Jumat) yang mengurangi Work Day.
 HOLIDAYS_BY_MONTH = {
+    (2026, 1): [1, 16],   # Januari 2026: 1 = libur nasional tahun baru, 16 = cuti bersama
     (2026, 2): [1, 7, 8, 14, 15, 16, 17, 21, 22, 28],  # Februari 2026
 }
 
@@ -13,6 +14,29 @@ HOLIDAYS_BY_MONTH = {
 def get_work_days_holidays(year, month):
     """Daftar tanggal hari libur di bulan tersebut (untuk referensi)."""
     return HOLIDAYS_BY_MONTH.get((year, month), [])
+
+
+# Ramadan Feb 2026: tgl 19-28, range jam masuk 07:00–07:45 (batas = 07:45 = 465 menit)
+# Di luar periode itu: batas 08:15 = 495 menit
+RAMADAN_FEB_2026_START = 19
+RAMADAN_FEB_2026_END = 28
+CHECK_IN_DEADLINE_RAMADAN_MINUTES = 7 * 60 + 45   # 07:45
+CHECK_IN_DEADLINE_NORMAL_MINUTES = 8 * 60 + 15     # 08:15
+
+# Ramadan: istirahat di-adjust 30 menit; total working hours tetap 8 jam/hari (tidak ada 8.5 jam)
+
+
+def get_check_in_deadline_minutes(date_or_ts):
+    """Batas jam masuk (dalam menit dari 00:00). Feb 2026 tgl 19–28 (Ramadan): 07:45 = 465. Lainnya: 08:15 = 495."""
+    if date_or_ts is None or (hasattr(date_or_ts, '__iter__') and pd.isna(date_or_ts)):
+        return CHECK_IN_DEADLINE_NORMAL_MINUTES
+    try:
+        d = date_or_ts.date() if hasattr(date_or_ts, 'date') else date_or_ts
+        if d.year == 2026 and d.month == 2 and RAMADAN_FEB_2026_START <= d.day <= RAMADAN_FEB_2026_END:
+            return CHECK_IN_DEADLINE_RAMADAN_MINUTES
+    except Exception:
+        pass
+    return CHECK_IN_DEADLINE_NORMAL_MINUTES
 
 
 def calculate_work_days(year, month):
@@ -54,7 +78,7 @@ def calculate_employee_stats(filtered_df, work_days_month):
     
     employee_stats_full['Work Days Bulan Ini'] = work_days_month
     employee_stats_full['Total Jam Kerja (Plan)'] = employee_stats_full['Work Days Bulan Ini'] * 8
-    
+
     return employee_stats_full
 
 
