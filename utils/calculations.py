@@ -24,6 +24,33 @@ CHECK_IN_DEADLINE_RAMADAN_MINUTES = 7 * 60 + 45   # 07:45
 CHECK_IN_DEADLINE_NORMAL_MINUTES = 8 * 60 + 15     # 08:15
 
 # Ramadan: istirahat di-adjust 30 menit; total working hours tetap 8 jam/hari (tidak ada 8.5 jam)
+# Ramadan 19–28 Feb 2026: batas jam pulang = 16:00 (early out jika < 16:00). Lainnya: 17:00
+CHECK_OUT_MINIMUM_RAMADAN_MINUTES = 16 * 60 + 0   # 16:00 = 960
+CHECK_OUT_MINIMUM_NORMAL_MINUTES = 17 * 60 + 0     # 17:00 = 1020
+
+
+def is_ramadan_feb_2026(date_or_ts):
+    """True jika tanggal dalam periode Ramadan 19–28 Feb 2026."""
+    if date_or_ts is None or (hasattr(date_or_ts, '__iter__') and pd.isna(date_or_ts)):
+        return False
+    try:
+        d = date_or_ts.date() if hasattr(date_or_ts, 'date') else date_or_ts
+        return d.year == 2026 and d.month == 2 and RAMADAN_FEB_2026_START <= d.day <= RAMADAN_FEB_2026_END
+    except Exception:
+        return False
+
+
+def get_check_out_minimum_minutes(date_or_ts):
+    """Batas jam pulang minimum (dalam menit dari 00:00). Feb 2026 tgl 19–28 (Ramadan): 16:00 = 960. Lainnya: 17:00 = 1020."""
+    if date_or_ts is None or (hasattr(date_or_ts, '__iter__') and pd.isna(date_or_ts)):
+        return CHECK_OUT_MINIMUM_NORMAL_MINUTES
+    try:
+        d = date_or_ts.date() if hasattr(date_or_ts, 'date') else date_or_ts
+        if d.year == 2026 and d.month == 2 and RAMADAN_FEB_2026_START <= d.day <= RAMADAN_FEB_2026_END:
+            return CHECK_OUT_MINIMUM_RAMADAN_MINUTES
+    except Exception:
+        pass
+    return CHECK_OUT_MINIMUM_NORMAL_MINUTES
 
 
 def get_check_in_deadline_minutes(date_or_ts):

@@ -2,7 +2,7 @@
 import pandas as pd
 import streamlit as st
 
-from utils.calculations import get_work_days_holidays
+from utils.calculations import get_work_days_holidays, get_check_out_minimum_minutes, is_ramadan_feb_2026
 
 
 # Map bulan ke nama file CSV
@@ -113,11 +113,47 @@ def load_data(month='january'):
         else:
             # Jika tidak ada kolom Actual, gunakan nilai Real sebagai proxy
             df['Actual Working Hour Decimal'] = df['Real Working Hour Decimal']
+
+        # Ramadan (19–28 Feb 2026): tambah 30 menit ke Jam Kerja (Real) dan Actual untuk semua record
+        def _decimal_to_hhmm(h):
+            """Jam desimal ke string HH:MM."""
+            if pd.isna(h):
+                return '00:00'
+            h_int = int(h)
+            m = round((h - h_int) * 60)
+            if m >= 60:
+                h_int += 1
+                m = 0
+            return f"{h_int:02d}:{m:02d}"
+
+        ramadan_mask = df['Date'].apply(is_ramadan_feb_2026)
+        if ramadan_mask.any():
+            df.loc[ramadan_mask, 'Real Working Hour Decimal'] = df.loc[ramadan_mask, 'Real Working Hour Decimal'] + 0.5
+            df.loc[ramadan_mask, 'Actual Working Hour Decimal'] = df.loc[ramadan_mask, 'Actual Working Hour Decimal'] + 0.5
+            df.loc[ramadan_mask, 'Real Working Hour'] = df.loc[ramadan_mask, 'Real Working Hour Decimal'].apply(_decimal_to_hhmm)
+            if 'Actual Working Hour' in df.columns:
+                df.loc[ramadan_mask, 'Actual Working Hour'] = df.loc[ramadan_mask, 'Actual Working Hour Decimal'].apply(_decimal_to_hhmm)
+
         df['Late In Decimal'] = df['Late In'].apply(parse_time_to_hours)
         df['Early Out Decimal'] = df['Early Out'].apply(parse_time_to_hours)
         df['Is Late In'] = df['Late In'].apply(parse_late_early)
         df['Is Early Out'] = df['Early Out'].apply(parse_late_early)
-        
+
+        # Early Out by rule: Ramadan (19–28 Feb 2026) pulang < 16:00 = early out; biasa < 17:00 = early out
+        df['_co_min'] = df['Check Out'].apply(time_to_minutes)
+        df['_co_threshold'] = df['Date'].apply(get_check_out_minimum_minutes)
+        has_co = df['_co_min'].notna()
+        is_early_by_rule = has_co & (df['_co_min'] < df['_co_threshold'])
+        df.loc[has_co, 'Is Early Out'] = is_early_by_rule[has_co]
+        def _early_out_decimal(r):
+            if r['_co_min'] is not None and r['_co_min'] < r['_co_threshold']:
+                return (r['_co_threshold'] - r['_co_min']) / 60.0
+            if r['_co_min'] is not None:
+                return 0.0
+            return r['Early Out Decimal']
+        df['Early Out Decimal'] = df.apply(_early_out_decimal, axis=1)
+        df = df.drop(columns=['_co_min', '_co_threshold'], errors='ignore')
+
         # Tentukan apakah hadir (ada Check In atau Attendance Code = 'H')
         df['Is Present'] = (
             (df['Check In'].notna() & (df['Check In'] != '')) |
