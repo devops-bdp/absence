@@ -431,15 +431,15 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         
         emp_detail_filtered['Check In Range'] = emp_detail_filtered.apply(check_in_time_range, axis=1)
         
-        detail_cols = ['Date', 'Status', 'Compliance', 'Check In Range', 'Shift', 'Check In', 'Check Out', 'Late In', 'Early Out', 
-                      'Real Working Hour', 'Actual Working Hour', 'Attendance Code']
+        detail_cols = ['Date', 'Status', 'Compliance', 'Check In Range', 'Shift', 'Check In', 'Check Out', 'Late In', 'Early Out',
+                      'Real Working Hour', 'Attendance Code']
         detail_display = emp_detail_filtered[detail_cols].copy()
         detail_display = detail_display.sort_values('Date', ascending=False)
         detail_display['Date'] = detail_display['Date'].dt.strftime('%Y-%m-%d (%A)')
         
         detail_display.columns = [
             'Tanggal', 'Status', '8 Hour Working Time', 'Jam Masuk (≤07.30 / ≤07.45 / ≤08.15)', 'Shift', 'Check In', 'Check Out', 'Late In', 'Early Out',
-            'Jam Kerja (Real)', 'Jam Kerja (Actual)', 'Kode Absensi'
+            'Jam Kerja', 'Kode Absensi'
         ]
         
         status_filter = st.multiselect(
