@@ -2,11 +2,11 @@
 import pandas as pd
 import streamlit as st
 
-from utils.calculations import get_work_days_holidays, get_check_out_minimum_minutes, is_ramadan_feb_2026
+from utils.calculations import get_work_days_holidays, get_check_out_minimum_minutes, is_ramadan_adjusted_hours_2026
 
 
 # Map bulan ke nama file CSV
-# 2025: Maret–Desember, 2026: Januari–Februari (bisa ditambah nanti jika ada file baru)
+# 2025: Maret–Desember, 2026: Januari dst. (tambah key + path CSV jika ada file baru)
 MONTH_FILES = {
     # 2025 - nama file bahasa Indonesia
     '2025-03': '2025/maret.csv',
@@ -21,6 +21,7 @@ MONTH_FILES = {
     '2025-12': '2025/desember.csv',
     'january': '2026/january.csv',   # Januari 2026
     'february': '2026/february.csv', # Februari 2026
+    'march': '2026/maret.csv',       # Maret 2026 (nama file: maret.csv)
 }
 
 # Nama karyawan yang dikecualikan dari analisis (mis. Direktur)
@@ -114,7 +115,7 @@ def load_data(month='january'):
             # Jika tidak ada kolom Actual, gunakan nilai Real sebagai proxy
             df['Actual Working Hour Decimal'] = df['Real Working Hour Decimal']
 
-        # Ramadan (19–28 Feb 2026): tambah 30 menit ke Jam Kerja (Real) dan Actual untuk semua record
+        # Puasa 2026: Feb 19–28 & Mar 1–17 — tambah 30 menit ke Jam Kerja (Real/Actual) (penyesuaian istirahat)
         def _decimal_to_hhmm(h):
             """Jam desimal ke string HH:MM."""
             if pd.isna(h):
@@ -126,10 +127,17 @@ def load_data(month='january'):
                 m = 0
             return f"{h_int:02d}:{m:02d}"
 
-        ramadan_mask = df['Date'].apply(is_ramadan_feb_2026)
+        ramadan_mask = df['Date'].apply(is_ramadan_adjusted_hours_2026)
         if ramadan_mask.any():
             df.loc[ramadan_mask, 'Real Working Hour Decimal'] = df.loc[ramadan_mask, 'Real Working Hour Decimal'] + 0.5
             df.loc[ramadan_mask, 'Actual Working Hour Decimal'] = df.loc[ramadan_mask, 'Actual Working Hour Decimal'] + 0.5
+
+        # Export tanpa kolom Real/Actual (mis. maret.csv): jam dihitung dari Check In/Out → isi string HH:MM untuk SEMUA baris.
+        # Sebelumnya hanya baris puasa yang disinkronkan, sehingga tgl 25–31 Maret (dst.) tetap 00:00 / tampak kosong.
+        if 'Real Working Hour' not in original_time_cols:
+            df['Real Working Hour'] = df['Real Working Hour Decimal'].apply(_decimal_to_hhmm)
+            df['Actual Working Hour'] = df['Actual Working Hour Decimal'].apply(_decimal_to_hhmm)
+        elif ramadan_mask.any():
             df.loc[ramadan_mask, 'Real Working Hour'] = df.loc[ramadan_mask, 'Real Working Hour Decimal'].apply(_decimal_to_hhmm)
             if 'Actual Working Hour' in df.columns:
                 df.loc[ramadan_mask, 'Actual Working Hour'] = df.loc[ramadan_mask, 'Actual Working Hour Decimal'].apply(_decimal_to_hhmm)
@@ -139,7 +147,7 @@ def load_data(month='january'):
         df['Is Late In'] = df['Late In'].apply(parse_late_early)
         df['Is Early Out'] = df['Early Out'].apply(parse_late_early)
 
-        # Early Out by rule: Ramadan (19–28 Feb 2026) pulang < 16:00 = early out; biasa < 17:00 = early out
+        # Early Out by rule: puasa (Feb 19–28, Mar 1–17 2026) pulang < 16:00; setelah lebaran / normal < 17:00
         df['_co_min'] = df['Check Out'].apply(time_to_minutes)
         df['_co_threshold'] = df['Date'].apply(get_check_out_minimum_minutes)
         has_co = df['_co_min'].notna()

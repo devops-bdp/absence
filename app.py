@@ -174,6 +174,7 @@ if st.session_state.current_page == 'landing':
         '2025-12': 'Desember 2025',
         'january': 'Januari 2026',
         'february': 'Februari 2026',
+        'march': 'Maret 2026',
     }
     month_list = list(month_options.keys())
     default_idx = month_list.index(st.session_state.selected_month) if st.session_state.selected_month in month_options else 0

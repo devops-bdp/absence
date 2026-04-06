@@ -260,7 +260,7 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
                      help="Hari bekerja ≥ 8 jam (Ramadan: istirahat 30 menit, total tetap 8 jam)")
         with r3_3:
             st.metric("🕐 Jam Masuk On Time", total_clock_on_time, delta=f"{clock_on_time_pct:.1f}%", delta_color="normal",
-                     help="Check In dalam range 07:00–07:45 (Ramadan 19–28 Feb) atau 07:00–08:15 (biasa)")
+                     help="Tepat waktu jika Check In ≤ batas tanggal: Mar 1–17/2026 → 07:30; Feb 19–28/2026 → 07:45; lainnya → 08:15")
 
         st.markdown("---")
         
@@ -408,7 +408,7 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
             axis=1
         )
         
-        # Kolom Check In Range: per tanggal batas 07:45 (Ramadan 19–28 Feb 2026) atau 08:15
+        # Kolom Check In Range: batas per tanggal (Mar 1–17 → 07:30, Feb 19–28 → 07:45, normal 08:15)
         def check_in_time_range(row):
             check_in_minutes = parse_check_in_to_minutes(row['Check In'])
             if check_in_minutes is None:
@@ -425,7 +425,7 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         detail_display['Date'] = detail_display['Date'].dt.strftime('%Y-%m-%d (%A)')
         
         detail_display.columns = [
-            'Tanggal', 'Status', '8 Hour Working Time', 'Jam Masuk (07.00-07.45 / 08.15)', 'Shift', 'Check In', 'Check Out', 'Late In', 'Early Out',
+            'Tanggal', 'Status', '8 Hour Working Time', 'Jam Masuk (≤07.30 / ≤07.45 / ≤08.15)', 'Shift', 'Check In', 'Check Out', 'Late In', 'Early Out',
             'Jam Kerja (Real)', 'Jam Kerja (Actual)', 'Kode Absensi'
         ]
         

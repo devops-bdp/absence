@@ -17,6 +17,7 @@ MONTH_OPTIONS = [
     # 2026
     ('january', 'Januari 2026'),
     ('february', 'Februari 2026'),
+    ('march', 'Maret 2026'),
 ]
 
 

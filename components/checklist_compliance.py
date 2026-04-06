@@ -7,7 +7,7 @@ from reports.pdf_report import create_table_pdf
 
 
 def check_in_out_time(row):
-    """Check jam masuk on time dan pulang tidak early out (Ramadan 19–28 Feb: >= 16:00, biasa >= 17:00)"""
+    """Check jam masuk on time dan pulang tidak early out (puasa: pulang >= 16:00; normal >= 17:00; batas masuk per tanggal)."""
     check_in_minutes = time_to_minutes(row['Check In'])
     check_out_minutes = time_to_minutes(row['Check Out'])
     
@@ -39,7 +39,7 @@ def render_checklist_compliance(filtered_df, selected_branch):
         lambda x: '✅' if x >= 8.0 else '❌'
     )
     
-    # Checklist 2: Jam masuk on time dan pulang on time (Ramadan >= 16:00, biasa >= 17:00)
+    # Checklist 2: Jam masuk on time dan pulang on time (batas masuk & pulang mengikuti tanggal: puasa / normal)
     checklist_data['Checklist_Jam_8_17'] = checklist_data.apply(check_in_out_time, axis=1)
     
     # Pilih kolom untuk checklist (dengan Branch dan Organization untuk display di UI)
