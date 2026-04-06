@@ -23,10 +23,14 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
     # Hitung metrik untuk karyawan yang dipilih
     total_present = emp_detail['Is Present'].sum()
     total_absent = emp_detail['Is Absent'].sum()
+    total_leave = int(emp_detail['Is Leave'].sum()) if 'Is Leave' in emp_detail.columns else 0
+    total_sick = int(emp_detail['Is Sick'].sum()) if 'Is Sick' in emp_detail.columns else 0
     total_work_day = total_employees * work_days_month
     # Hitung persentase relatif terhadap Total Work Day
     attendance_percentage = (total_present / total_work_day * 100) if total_work_day > 0 else 0
     absent_percentage = (total_absent / total_work_day * 100) if total_work_day > 0 else 0
+    leave_percentage = (total_leave / total_work_day * 100) if total_work_day > 0 else 0
+    sick_percentage = (total_sick / total_work_day * 100) if total_work_day > 0 else 0
     
     # Hitung total jam kerja untuk karyawan yang dipilih
     total_jam_kerja_real = emp_data['Total Jam Kerja (Real)']
@@ -34,8 +38,8 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
     total_jam_kerja_real_formatted = format_hours(total_jam_kerja_real)
     total_jam_kerja_plant_formatted = format_hours(total_jam_kerja_plant)
     
-    # Tampilkan metrik dalam 2 baris
-    col_stat1, col_stat2, col_stat3, col_stat4, col_stat5 = st.columns(5)
+    # Tampilkan metrik dalam 2 baris (Sakit terpisah dari Tidak Hadir — absen tidak termasuk hari sakit)
+    col_stat1, col_stat2, col_stat3, col_stat4, col_stat5, col_stat6, col_stat7 = st.columns(7)
     
     with col_stat1:
         st.metric("Total Karyawan", total_employees, help="Formula: COUNT(DISTINCT Employee ID) = 1 (untuk detail personal)")
@@ -47,15 +51,21 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
         st.metric("Total Kehadiran", f"{int(total_present)} ({attendance_percentage:.1f}%)", 
                  help=f"Formula: SUM(Is Present) untuk karyawan ini\nPersentase: (Total Kehadiran / Total Work Day) × 100%")
     with col_stat5:
+        st.metric("Cuti", f"{total_leave} ({leave_percentage:.1f}%)",
+                 help="Formula: SUM(Is Leave) untuk karyawan ini (cuti/izin, termasuk Roster Leave)\nPersentase: (Cuti / Total Work Day) × 100%")
+    with col_stat6:
+        st.metric("Sakit", f"{total_sick} ({sick_percentage:.1f}%)",
+                 help="Formula: SUM(Is Sick) — kode S (Attendance / Time Off)\nBukan cuti dan tidak masuk ke Total Tidak Hadir (absen)")
+    with col_stat7:
         st.metric("Total Tidak Hadir", f"{int(total_absent)} ({absent_percentage:.1f}%)", 
-                 help=f"Formula: SUM(Is Absent) untuk karyawan ini\nPersentase: (Total Tidak Hadir / Total Work Day) × 100%")
+                 help="Formula: SUM(Is Absent): tidak hadir tanpa cuti/sakit/libur\nTidak termasuk hari sakit (S) atau hari libur")
     
     # Baris kedua untuk Total Jam Kerja
-    col_stat6, col_stat7 = st.columns(2)
+    col_jam1, col_jam2 = st.columns(2)
     
     total_records_with_hours = len(emp_detail[emp_detail['Real Working Hour Decimal'] > 0])
     
-    with col_stat6:
+    with col_jam1:
         help_text_real = (
             f"Formula: SUM(Real Working Hour Decimal) untuk karyawan ini\n"
             f"Penjelasan: Menjumlahkan semua jam kerja real dari record absensi karyawan ini\n"
@@ -65,7 +75,7 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
         )
         st.metric("Total Jam Kerja", total_jam_kerja_real_formatted, help=help_text_real)
     
-    with col_stat7:
+    with col_jam2:
         help_text_plant = (
             f"Formula: Total Work Day × 8 jam\n"
             f"Penjelasan: Total jam kerja ideal (Plan) = {total_work_day} × 8 = {total_jam_kerja_plant:.2f} jam\n"
@@ -115,10 +125,13 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
     
     # Download Ringkasan Statistik Personal
     summary_data = {
-        'Metrik': ['Total Karyawan', 'Work Day', 'Total Work Day', 'Total Kehadiran', 'Total Kehadiran (%)', 
-                   'Total Tidak Hadir', 'Total Tidak Hadir (%)', 'Total Jam Kerja', 'Plan Jam Kerja'],
-        'Nilai': [total_employees, work_days_month, total_work_day, int(total_present), f"{attendance_percentage:.2f}%", 
-                 int(total_absent), f"{absent_percentage:.2f}%", total_jam_kerja_real_formatted, total_jam_kerja_plant_formatted]
+        'Metrik': ['Total Karyawan', 'Work Day', 'Total Work Day', 'Total Kehadiran', 'Total Kehadiran (%)',
+                   'Cuti', 'Cuti (%)', 'Sakit', 'Sakit (%)', 'Total Tidak Hadir', 'Total Tidak Hadir (%)',
+                   'Total Jam Kerja', 'Plan Jam Kerja'],
+        'Nilai': [total_employees, work_days_month, total_work_day, int(total_present), f"{attendance_percentage:.2f}%",
+                 total_leave, f"{leave_percentage:.2f}%", total_sick, f"{sick_percentage:.2f}%",
+                 int(total_absent), f"{absent_percentage:.2f}%",
+                 total_jam_kerja_real_formatted, total_jam_kerja_plant_formatted]
     }
     summary_df = pd.DataFrame(summary_data)
     csv_summary = summary_df.to_csv(index=False)
