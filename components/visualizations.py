@@ -8,11 +8,10 @@ def render_visualizations(employee_stats_full, selected_branch, work_days_month=
     st.header("📊 Visualisasi Data")
     
     # Tab untuk berbagai visualisasi
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "📈 Jumlah Absensi",
         "⏱️ Jam Kerja",
         "⏰ Keterlambatan",
-        "🚪 Early Out"
     ])
     
     with tab1:
@@ -92,6 +91,11 @@ def render_visualizations(employee_stats_full, selected_branch, work_days_month=
     
     with tab3:
         st.subheader("Keterlambatan Per Karyawan")
+        st.caption(
+            "Keterlambatan dihitung jika jam masuk **setelah 08:15** "
+            "(periode puasa: setelah 07:30 atau 07:45 sesuai tanggal). "
+            "Hari libur, cuti, dan sakit tidak dihitung."
+        )
         top_late = employee_stats_full[employee_stats_full['Jumlah Late In'] > 0].nlargest(20, 'Jumlah Late In')
         if len(top_late) > 0:
             fig2 = px.bar(
@@ -116,33 +120,6 @@ def render_visualizations(employee_stats_full, selected_branch, work_days_month=
             )
         else:
             st.info("Tidak ada data keterlambatan")
-    
-    with tab4:
-        st.subheader("Early Out Per Karyawan")
-        top_early = employee_stats_full[employee_stats_full['Jumlah Early Out'] > 0].nlargest(20, 'Jumlah Early Out')
-        if len(top_early) > 0:
-            fig3 = px.bar(
-                top_early,
-                x='Jumlah Early Out',
-                y='Full Name',
-                orientation='h',
-                title="Top 20 Karyawan dengan Early Out Terbanyak",
-                labels={'Full Name': 'Nama Karyawan', 'Jumlah Early Out': 'Jumlah Early Out'},
-                color='Jumlah Early Out',
-                color_continuous_scale='Oranges'
-            )
-            fig3.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
-            st.plotly_chart(fig3, use_container_width=True)
-            csv_viz_early = top_early[['Employee ID', 'Full Name', 'Jumlah Early Out']].to_csv(index=False)
-            st.download_button(
-                label="📥 Download Data Chart Early Out (CSV)",
-                data=csv_viz_early,
-                file_name=f"data_chart_early_out_{selected_branch}.csv",
-                mime="text/csv",
-                key='download_viz_early'
-            )
-        else:
-            st.info("Tidak ada data early out")
     
     st.markdown("---")
 

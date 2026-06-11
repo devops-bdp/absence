@@ -2,7 +2,11 @@
 import pandas as pd
 import streamlit as st
 
-from utils.calculations import get_work_days_holidays, get_check_out_minimum_minutes, is_ramadan_adjusted_hours_2026
+from utils.calculations import (
+    get_work_days_holidays,
+    get_check_out_minimum_minutes,
+    get_check_in_deadline_minutes,
+)
 
 
 # Map bulan ke nama file CSV
@@ -22,6 +26,8 @@ MONTH_FILES = {
     'january': '2026/january.csv',   # Januari 2026
     'february': '2026/february.csv', # Februari 2026
     'march': '2026/maret.csv',       # Maret 2026 (nama file: maret.csv)
+    'april': '2026/april.csv',       # April 2026
+    'may': '2026/mei.csv',           # Mei 2026 (nama file: mei.csv)
 }
 
 # Nama karyawan yang dikecualikan dari analisis (mis. Direktur)
@@ -30,13 +36,25 @@ EXCLUDED_EMPLOYEE_NAMES = {'Sumardi', 'Henri Hendriansah', 'Iwan'}
 EXCLUDED_JOB_POSITIONS = {'Direktur'}
 
 
+def _read_attendance_csv(filename):
+    """Baca CSV absensi; deteksi pemisah koma (export lama) atau titik koma (export baru)."""
+    with open(filename, encoding='utf-8-sig') as f:
+        header = f.readline()
+    sep = ';' if header.count(';') > header.count(',') else ','
+    return pd.read_csv(filename, sep=sep, encoding='utf-8-sig')
+
+
+# Naikkan angka ini jika logika transform data berubah (memaksa Streamlit memuat ulang cache).
+_PIPELINE_VERSION = 6
+
+
 @st.cache_data
-def load_data(month='january'):
+def load_data(month='january', _pipeline_version=_PIPELINE_VERSION):
     """Load dan clean data dari CSV. Parameter month mengacu ke key di MONTH_FILES."""
     try:
         # Default fallback ke Januari 2026 jika key tidak dikenal
         filename = MONTH_FILES.get(month, MONTH_FILES['january'])
-        df = pd.read_csv(filename)
+        df = _read_attendance_csv(filename)
 
         # Normalisasi nama kolom (hilangkan spasi dan tanda * di akhir seperti 'Employee ID*', 'Date*', dst.)
         df.columns = (
@@ -95,6 +113,17 @@ def load_data(month='january'):
             except:
                 return False
         
+        def _decimal_to_hhmm(h):
+            """Jam desimal ke string HH:MM."""
+            if pd.isna(h):
+                return '00:00'
+            h_int = int(h)
+            m = round((h - h_int) * 60)
+            if m >= 60:
+                h_int += 1
+                m = 0
+            return f"{h_int:02d}:{m:02d}"
+
         # Apply parsing
         # Jika data punya kolom 'Real Working Hour', gunakan itu.
         # Jika tidak (seperti data 2025), hitung jam kerja dari selisih Check In dan Check Out.
@@ -112,39 +141,27 @@ def load_data(month='january'):
         if 'Actual Working Hour' in original_time_cols:
             df['Actual Working Hour Decimal'] = df['Actual Working Hour'].apply(parse_time_to_hours)
         else:
-            # Jika tidak ada kolom Actual, gunakan nilai Real sebagai proxy
             df['Actual Working Hour Decimal'] = df['Real Working Hour Decimal']
 
-        # Puasa 2026: Feb 19–28 & Mar 1–17 — tambah 30 menit ke Jam Kerja (Real/Actual) (penyesuaian istirahat)
-        def _decimal_to_hhmm(h):
-            """Jam desimal ke string HH:MM."""
-            if pd.isna(h):
-                return '00:00'
-            h_int = int(h)
-            m = round((h - h_int) * 60)
-            if m >= 60:
-                h_int += 1
-                m = 0
-            return f"{h_int:02d}:{m:02d}"
+        # Export kadang isi Real Working Hour = 00:00 padahal ada Check In/Out — hitung ulang dari absensi
+        if 'Real Working Hour' in original_time_cols:
+            _ci_min = df['Check In'].apply(time_to_minutes)
+            _co_min = df['Check Out'].apply(time_to_minutes)
+            _fix_real = _ci_min.notna() & _co_min.notna() & (df['Real Working Hour Decimal'] <= 0)
+            if _fix_real.any():
+                df.loc[_fix_real, 'Real Working Hour Decimal'] = (
+                    (_co_min[_fix_real] - _ci_min[_fix_real]).astype(float) / 60.0
+                )
+                df.loc[_fix_real, 'Real Working Hour'] = (
+                    df.loc[_fix_real, 'Real Working Hour Decimal'].apply(_decimal_to_hhmm)
+                )
 
-        ramadan_mask = df['Date'].apply(is_ramadan_adjusted_hours_2026)
-        if ramadan_mask.any():
-            df.loc[ramadan_mask, 'Real Working Hour Decimal'] = df.loc[ramadan_mask, 'Real Working Hour Decimal'] + 0.5
-            df.loc[ramadan_mask, 'Actual Working Hour Decimal'] = df.loc[ramadan_mask, 'Actual Working Hour Decimal'] + 0.5
-
-        # Export tanpa kolom Real/Actual (mis. maret.csv): jam dihitung dari Check In/Out → isi string HH:MM untuk SEMUA baris.
-        # Sebelumnya hanya baris puasa yang disinkronkan, sehingga tgl 25–31 Maret (dst.) tetap 00:00 / tampak kosong.
+        # Export tanpa kolom Real/Actual (mis. maret.csv): isi string HH:MM dari desimal untuk semua baris.
         if 'Real Working Hour' not in original_time_cols:
             df['Real Working Hour'] = df['Real Working Hour Decimal'].apply(_decimal_to_hhmm)
             df['Actual Working Hour'] = df['Actual Working Hour Decimal'].apply(_decimal_to_hhmm)
-        elif ramadan_mask.any():
-            df.loc[ramadan_mask, 'Real Working Hour'] = df.loc[ramadan_mask, 'Real Working Hour Decimal'].apply(_decimal_to_hhmm)
-            if 'Actual Working Hour' in df.columns:
-                df.loc[ramadan_mask, 'Actual Working Hour'] = df.loc[ramadan_mask, 'Actual Working Hour Decimal'].apply(_decimal_to_hhmm)
 
-        df['Late In Decimal'] = df['Late In'].apply(parse_time_to_hours)
         df['Early Out Decimal'] = df['Early Out'].apply(parse_time_to_hours)
-        df['Is Late In'] = df['Late In'].apply(parse_late_early)
         df['Is Early Out'] = df['Early Out'].apply(parse_late_early)
 
         # Early Out by rule: puasa (Feb 19–28, Mar 1–17 2026) pulang < 16:00; setelah lebaran / normal < 17:00
@@ -199,6 +216,17 @@ def load_data(month='january'):
             (df['Time Off Code'] == 'CPD') |
             (df['Shift'].str.contains('Roster Leave', case=False, na=False))
         )
+
+        # Hari cuti: 8 jam kerja (plan) di kolom Jam Kerja; tetap status cuti, bukan dihitung hadir
+        if df['Is Leave'].any():
+            df.loc[df['Is Leave'], 'Real Working Hour Decimal'] = 8.0
+            df.loc[df['Is Leave'], 'Actual Working Hour Decimal'] = 8.0
+            df.loc[df['Is Leave'], 'Real Working Hour'] = '08:00'
+            df.loc[df['Is Leave'], 'Actual Working Hour'] = '08:00'
+            df.loc[df['Is Leave'], 'Is Present'] = False
+
+        if df['Is Sick'].any():
+            df.loc[df['Is Sick'], 'Is Present'] = False
         
         # Tidak hadir (absen): bukan hadir, bukan cuti, bukan sakit, bukan hari libur
         df['Is Absent'] = (
@@ -207,6 +235,43 @@ def load_data(month='january'):
             (~df['Is Sick']) &
             (~df['Is Dayoff'])
         )
+
+        # Late In: Check In lewat batas tepat waktu (normal 08:15; puasa 07:30 / 07:45 per tanggal), bukan kolom CSV
+        df['_ci_min'] = df['Check In'].apply(time_to_minutes)
+        df['_ci_deadline'] = df['Date'].apply(get_check_in_deadline_minutes)
+        late_eligible = (
+            df['_ci_min'].notna()
+            & (~df['Is Leave'])
+            & (~df['Is Dayoff'])
+            & (~df['Is Sick'])
+        )
+        df['Is Late In'] = late_eligible & (df['_ci_min'] > df['_ci_deadline'])
+
+        def _late_in_decimal(r):
+            if r['_ci_min'] is None or r['Is Leave'] or r['Is Dayoff'] or r['Is Sick']:
+                return 0.0
+            if r['_ci_min'] > r['_ci_deadline']:
+                return (r['_ci_min'] - r['_ci_deadline']) / 60.0
+            return 0.0
+
+        df['Late In Decimal'] = df.apply(_late_in_decimal, axis=1)
+        df['Late In'] = df['Late In Decimal'].apply(_decimal_to_hhmm)
+
+        # 8 jam kerja (plan): cuti = 8 jam; hadir = masuk ≤ batas & pulang ≥ batas (bukan Real Working Hour CSV)
+        co_min = df['Check Out'].apply(time_to_minutes)
+        co_minimum = df['Date'].apply(get_check_out_minimum_minutes)
+        attended_full_day = (
+            df['Is Present']
+            & ~df['Is Dayoff']
+            & ~df['Is Sick']
+            & df['_ci_min'].notna()
+            & co_min.notna()
+            & (df['_ci_min'] <= df['_ci_deadline'])
+            & (co_min >= co_minimum)
+        )
+        df['Meets 8 Hour Work Day'] = df['Is Leave'] | attended_full_day
+
+        df = df.drop(columns=['_ci_min', '_ci_deadline'], errors='ignore')
         
         return df
     except FileNotFoundError:

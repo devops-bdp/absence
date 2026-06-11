@@ -161,11 +161,13 @@ def render_personal_summary_stats_for_employee(selected_employee, employee_stats
 
 
 def get_status(row):
-    """Get status untuk setiap hari"""
+    """Get status untuk setiap hari (cuti/sakit diutamakan sebelum hadir meski ada Check In / kode H)."""
+    if row['Is Leave']:
+        return '✈️ Cuti'
+    if row.get('Is Sick', False):
+        return '🤒 Sakit'
     if row['Is Present']:
         return '✅ Hadir'
-    elif row['Is Leave']:
-        return '✈️ Cuti'
     elif row['Is Dayoff']:
         return '🏖️ Hari Libur'
     elif row['Is Absent']:
@@ -222,7 +224,7 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         st.markdown("---")
         
         # Statistik utama — dihitung dulu yang dipakai di beberapa metrik
-        total_work_8_hours = len(emp_detail[emp_detail['Real Working Hour Decimal'] >= 8])
+        total_work_8_hours = int(emp_detail['Meets 8 Hour Work Day'].sum()) if 'Meets 8 Hour Work Day' in emp_detail.columns else len(emp_detail[emp_detail['Real Working Hour Decimal'] >= 8])
         emp_detail_with_checkin = emp_detail[emp_detail['Check In'].notna() & (emp_detail['Check In'] != '')].copy()
         if len(emp_detail_with_checkin) > 0:
             emp_detail_with_checkin['Check In Minutes'] = emp_detail_with_checkin['Check In'].apply(parse_check_in_to_minutes)
@@ -270,7 +272,7 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
             st.metric("⏱️ Total Jam Kerja", emp_data['Total Jam Kerja (Real) Formatted'], help="Total jam kerja (Real Working Hour)")
         with r3_2:
             st.metric("⏰ Total Work 8 Hours", total_work_8_hours, delta=f"{work_8_pct:.1f}%", delta_color="normal",
-                     help="Hari bekerja ≥ 8 jam (Ramadan: istirahat 30 menit, total tetap 8 jam)")
+                     help="Hari memenuhi 8 jam kerja: cuti (plan) atau hadir dengan masuk tepat waktu & pulang ≥ batas")
         with r3_3:
             st.metric("🕐 Jam Masuk On Time", total_clock_on_time, delta=f"{clock_on_time_pct:.1f}%", delta_color="normal",
                      help="Tepat waktu jika Check In ≤ batas tanggal: Mar 1–17/2026 → 07:30; Feb 19–28/2026 → 07:45; lainnya → 08:15")
@@ -414,10 +416,19 @@ def render_employee_detail(employee_stats, filtered_df, work_days_month=None, se
         ].copy()
         
         emp_detail_filtered['Status'] = emp_detail_filtered.apply(get_status, axis=1)
+
+        # Cuti: Jam Kerja 08:00 (status tetap Cuti, bukan Hadir)
+        if 'Is Leave' in emp_detail_filtered.columns:
+            leave_rows = emp_detail_filtered['Is Leave'] == True
+            if leave_rows.any():
+                emp_detail_filtered.loc[leave_rows, 'Real Working Hour Decimal'] = 8.0
+                emp_detail_filtered.loc[leave_rows, 'Real Working Hour'] = '08:00'
         
-        # Compliance: minimum 8 jam kerja per hari (Ramadan istirahat 30 menit, total tetap 8 jam)
-        emp_detail_filtered['Compliance'] = emp_detail_filtered.apply(
-            lambda row: '✅' if (row['Real Working Hour Decimal'] >= 8) else '❌',
+        # Compliance 8 jam: masuk ≤ batas & pulang ≥ batas (atau cuti = 8 jam plan), bukan Real Working Hour CSV
+        emp_detail_filtered['Compliance'] = emp_detail_filtered['Meets 8 Hour Work Day'].apply(
+            lambda ok: '✅' if ok else '❌'
+        ) if 'Meets 8 Hour Work Day' in emp_detail_filtered.columns else emp_detail_filtered.apply(
+            lambda row: '✅' if (row.get('Is Leave', False) or row['Real Working Hour Decimal'] >= 8) else '❌',
             axis=1
         )
         

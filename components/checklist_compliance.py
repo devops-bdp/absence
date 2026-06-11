@@ -34,10 +34,15 @@ def render_checklist_compliance(filtered_df, selected_branch):
     # Filter hanya yang hadir
     checklist_data = checklist_data[checklist_data['Is Present'] == True].copy()
     
-    # Checklist 1: Kerja 8 jam per hari (total working hours tetap 8 jam; Ramadan istirahat 30 menit)
-    checklist_data['Checklist_8_Jam'] = checklist_data['Real Working Hour Decimal'].apply(
-        lambda x: '✅' if x >= 8.0 else '❌'
-    )
+    # Checklist 1: 8 jam kerja (masuk tepat waktu & pulang ≥ batas, atau cuti)
+    if 'Meets 8 Hour Work Day' in checklist_data.columns:
+        checklist_data['Checklist_8_Jam'] = checklist_data['Meets 8 Hour Work Day'].apply(
+            lambda ok: '✅' if ok else '❌'
+        )
+    else:
+        checklist_data['Checklist_8_Jam'] = checklist_data['Real Working Hour Decimal'].apply(
+            lambda x: '✅' if x >= 8.0 else '❌'
+        )
     
     # Checklist 2: Jam masuk on time dan pulang on time (batas masuk & pulang mengikuti tanggal: puasa / normal)
     checklist_data['Checklist_Jam_8_17'] = checklist_data.apply(check_in_out_time, axis=1)

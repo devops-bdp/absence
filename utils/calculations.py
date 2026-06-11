@@ -10,6 +10,11 @@ HOLIDAYS_BY_MONTH = {
     (2026, 2): [1, 7, 8, 14, 15, 16, 17, 21, 22, 28],  # Februari 2026
     # Maret 2026: SKB 3 Menteri — CB 18; LN Nyepi 19; CB 20; LN Idulfitri 21–22; CB 23–24
     (2026, 3): [18, 19, 20, 21, 22, 23, 24],
+    # April 2026: SKB 3 Menteri — LN 3 Apr Wafat Yesus Kristus; LN 5 Apr Paskah
+    (2026, 4): [3, 5],
+    # Mei 2026: LN 1 Mei, 14 Mei (Kenaikan), 27 Mei (Iduladha), 31 Mei (Waisak).
+    # 15 & 28 Mei (cuti bersama SKB) — kantor tetap kerja, tidak masuk daftar libur.
+    (2026, 5): [1, 14, 27, 31],
 }
 
 
@@ -29,7 +34,6 @@ CHECK_IN_DEADLINE_RAMADAN_FEB_MINUTES = 7 * 60 + 45   # 07:45
 CHECK_IN_DEADLINE_RAMADAN_MAR_MINUTES = 7 * 60 + 30   # 07:30
 CHECK_IN_DEADLINE_NORMAL_MINUTES = 8 * 60 + 15         # 08:15 (normal, termasuk 25–31 Mar 2026)
 
-# Ramadan: istirahat di-adjust +30 menit pada jam kerja terekam; total efektif 8 jam/hari
 # Puasa: batas jam pulang = 16:00 (early out jika < 16:00). Normal: 17:00
 CHECK_OUT_MINIMUM_RAMADAN_MINUTES = 16 * 60 + 0   # 16:00 = 960
 CHECK_OUT_MINIMUM_NORMAL_MINUTES = 17 * 60 + 0     # 17:00 = 1020
@@ -64,11 +68,6 @@ def is_ramadan_mar_2026_partial(date_or_ts):
     if d is None:
         return False
     return d.year == 2026 and d.month == 3 and RAMADAN_MAR_2026_START <= d.day <= RAMADAN_MAR_2026_END
-
-
-def is_ramadan_adjusted_hours_2026(date_or_ts):
-    """Hari yang dapat penyesuaian +30 menit jam kerja (istirahat puasa): Feb 19–28 atau Mar 1–17 2026."""
-    return is_ramadan_feb_2026(date_or_ts) or is_ramadan_mar_2026_partial(date_or_ts)
 
 
 def get_check_out_minimum_minutes(date_or_ts):
